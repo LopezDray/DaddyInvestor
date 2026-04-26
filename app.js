@@ -2,12 +2,9 @@ const $ = (id) => document.getElementById(id);
 
 const FINNHUB_API_KEY = "d7mvaa9r01qngrvpii50d7mvaa9r01qngrvpii5g";
 const FAST_MODE = true;
-const USE_CLASSIC_DEMO_CHART = false;
-const PREFER_YAHOO_CHART = true;
-const QUOTE_TIMEOUT_MS = 3000;
 const CHART_TIMEOUT_MS = 4500;
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
-const DATA_CACHE_VERSION = "yahoo-real-v5";
+const DATA_CACHE_VERSION = "close-canonical-v1";
 const DISPLAY_SMOOTH_DAYS = 1;
 
 const state = {
@@ -18,13 +15,6 @@ const state = {
   quote: null,
   finnhubKey: "",
   requestId: 0,
-};
-
-const sampleSymbols = {
-  AAPL: { base: 185, drift: 0.035, wave: 18 },
-  BABA: { base: 82, drift: 0.018, wave: 13 },
-  TSM: { base: 158, drift: 0.04, wave: 24 },
-  TSLA: { base: 330, drift: 0.045, wave: 70 },
 };
 
 function money(value) {
@@ -45,19 +35,6 @@ function formatMarketDate(dateText) {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  });
-}
-
-function formatQuoteTime(date) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString("en-US", {
-    timeZone: "America/New_York",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
   });
 }
 
@@ -108,16 +85,19 @@ async function fetchStooq(symbol) {
 async function fetchYahoo(symbol) {
   try {
     return await Promise.any([
-      fetchYahooRange(symbol, "query1.finance.yahoo.com", "1y"),
-      fetchYahooRange(symbol, "query2.finance.yahoo.com", "1y"),
+      fetchYahooRange(symbol, "query1.finance.yahoo.com", "5y"),
+      fetchYahooRange(symbol, "query2.finance.yahoo.com", "5y"),
     ]);
-  } catch (oneYearError) {
+  } catch (fiveYearError) {
     try {
-      return await fetchYahooPeriod(symbol);
-    } catch (periodError) {
-      return Promise.any([
+      return await Promise.any([
         fetchYahooRange(symbol, "query1.finance.yahoo.com", "2y"),
         fetchYahooRange(symbol, "query2.finance.yahoo.com", "2y"),
+      ]);
+    } catch (twoYearError) {
+      return Promise.any([
+        fetchYahooRange(symbol, "query1.finance.yahoo.com", "1y"),
+        fetchYahooRange(symbol, "query2.finance.yahoo.com", "1y"),
       ]);
     }
   }
@@ -226,40 +206,6 @@ async function fetchFinnhubCandles(symbol) {
   throw lastError || new Error("Finnhub ไม่มีข้อมูลกราฟ");
 }
 
-async function fetchYahooQuote(symbol) {
-  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbol)}`;
-  const payload = await fetchJson(url, "Yahoo Finance quote");
-  const quote = payload?.quoteResponse?.result?.[0];
-  const price = Number(quote?.regularMarketPrice);
-  if (!Number.isFinite(price) || price <= 0) throw new Error("ไม่มีราคาล่าสุดจาก Yahoo quote");
-
-  return {
-    price,
-    previousClose: Number(quote?.regularMarketPreviousClose),
-    time: quote?.regularMarketTime ? new Date(quote.regularMarketTime * 1000) : new Date(),
-    marketState: quote?.marketState || "",
-    source: "Yahoo Finance quote",
-  };
-}
-
-async function fetchFinnhubQuote(symbol) {
-  const token = state.finnhubKey;
-  if (!token) throw new Error("ยังไม่มี Finnhub API key");
-
-  const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(token)}`;
-  const payload = await fetchJson(url, "Finnhub quote");
-  const price = Number(payload?.c);
-  if (!Number.isFinite(price) || price <= 0) throw new Error("ไม่มีราคาล่าสุดจาก Finnhub");
-
-  return {
-    price,
-    previousClose: Number(payload?.pc),
-    time: payload?.t ? new Date(payload.t * 1000) : new Date(),
-    marketState: "FINNHUB",
-    source: "Finnhub quote",
-  };
-}
-
 async function fetchJson(url, providerName) {
   if (isYahooChartProvider(providerName)) {
     return fetchYahooChartJson(url, providerName);
@@ -301,7 +247,6 @@ async function fetchProxyJson(url, providerName) {
 
 function timeoutForProvider(providerName) {
   const name = providerName.toLowerCase();
-  if (name.includes("quote")) return QUOTE_TIMEOUT_MS;
   if (name.includes("chart") || name.includes("candle")) return CHART_TIMEOUT_MS;
   return CHART_TIMEOUT_MS;
 }
@@ -369,81 +314,6 @@ function parseStooqCsv(csv) {
       };
     })
     .filter((candle) => candle.date && Number.isFinite(candle.close) && candle.close > 0);
-}
-
-function makeSampleData(symbol) {
-  const profile = sampleSymbols[symbol] || { base: 96, drift: 0.028, wave: 16 };
-  const today = new Date();
-  const candles = [];
-  let price = profile.base * 0.72;
-
-  for (let i = 1600; i >= 0; i -= 1) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - i);
-    const day = date.getDay();
-    if (day === 0 || day === 6) continue;
-
-    const t = candles.length;
-    const trend = 1 + profile.drift * (t / 252);
-    const wave = Math.sin(t / 26) * profile.wave + Math.cos(t / 71) * profile.wave * 0.55;
-    price = Math.max(5, profile.base * trend + wave + Math.sin(t / 9) * 3);
-    const spread = Math.max(0.8, price * 0.018);
-    candles.push({
-      date: date.toISOString().slice(0, 10),
-      open: price - spread * 0.2,
-      high: price + spread,
-      low: price - spread,
-      close: price,
-      volume: 1000000 + t * 1200,
-    });
-  }
-  return candles;
-}
-
-function makeFlatFallbackData(symbol, targetPrice) {
-  const price = Number.isFinite(targetPrice) && targetPrice > 0 ? targetPrice : (sampleSymbols[symbol]?.base || 100);
-  const today = new Date();
-  const candles = [];
-
-  for (let i = 420; i >= 0; i -= 1) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - i);
-    const day = date.getDay();
-    if (day === 0 || day === 6) continue;
-
-    const t = candles.length;
-    const slowWave = Math.sin(t / 34) * price * 0.025;
-    const microWave = Math.cos(t / 17) * price * 0.01;
-    const close = price + slowWave + microWave;
-    const spread = Math.max(price * 0.006, 0.25);
-    candles.push({
-      date: date.toISOString().slice(0, 10),
-      open: close - spread * 0.2,
-      high: close + spread,
-      low: close - spread,
-      close,
-      volume: 0,
-    });
-  }
-
-  return anchorCandlesToPrice(candles, price);
-}
-
-function anchorCandlesToPrice(candles, targetPrice) {
-  const lastClose = candles.at(-1)?.close;
-  if (!Number.isFinite(lastClose) || !Number.isFinite(targetPrice) || targetPrice <= 0) return candles;
-  const multiplier = targetPrice / lastClose;
-  const anchored = candles.map((candle) => ({
-    ...candle,
-    open: candle.open * multiplier,
-    high: candle.high * multiplier,
-    low: candle.low * multiplier,
-    close: candle.close * multiplier,
-  }));
-  anchored[anchored.length - 1].close = targetPrice;
-  anchored[anchored.length - 1].high = Math.max(anchored.at(-1).high, targetPrice);
-  anchored[anchored.length - 1].low = Math.min(anchored.at(-1).low, targetPrice);
-  return anchored;
 }
 
 function sma(values, period) {
@@ -568,7 +438,7 @@ function analyze(candles, lookback, riskMode, quote = null) {
   const highs = scoped.map((candle) => candle.high);
   const lows = scoped.map((candle) => candle.low);
   const latest = scoped.at(-1);
-  const displayPrice = Number.isFinite(quote?.price) ? quote.price : latest.close;
+  const displayPrice = latest.close;
   const last = displayPrice;
   const high = Math.max(...highs);
   const low = Math.min(...lows);
@@ -656,7 +526,7 @@ function analyze(candles, lookback, riskMode, quote = null) {
     closes,
     latest,
     displayPrice,
-    quote,
+    quote: null,
     high,
     low,
     fib,
@@ -706,9 +576,7 @@ function renderLists(analysis) {
 function updateSummary(symbol, analysis, isSample) {
   $("chartTitle").textContent = symbol;
   $("lastPrice").textContent = money(analysis.displayPrice);
-  $("lastPriceDate").textContent = analysis.quote
-    ? `อัปเดต ${formatQuoteTime(analysis.quote.time)}${analysis.quote.marketState ? ` · ${analysis.quote.marketState}` : ""}`
-    : `ปิดตลาด ${formatMarketDate(analysis.latest.date)}`;
+  $("lastPriceDate").textContent = `ปิดตลาด ${formatMarketDate(analysis.latest.date)}`;
   $("trendState").textContent = analysis.trendState;
   $("accumulationZone").textContent = `${money(analysis.zoneBottom)} - ${money(analysis.zoneTop)}`;
   $("fiboSummary").textContent = `${money(analysis.fib["50.0"])} / ${money(analysis.fib["61.8"])}`;
@@ -721,7 +589,7 @@ function updateSummary(symbol, analysis, isSample) {
   } else {
     $("zoneReason").textContent = `${scoreText}: ราคาอยู่ห่าง EMA200 ${pct(analysis.emaDistance)} และเทรนด์คือ ${analysis.trendState}`;
   }
-  $("statusPill").textContent = isSample ? "กราฟตัวอย่าง" : analysis.quote ? "ราคาล่าสุด" : "ข้อมูลจริงรายวัน";
+  $("statusPill").textContent = isSample ? "ข้อมูลตัวอย่าง" : "ราคาปิดล่าสุด";
   $("dataSource").textContent = state.provider;
   renderLists(analysis);
 }
@@ -947,6 +815,72 @@ function smoothDisplaySeries(series, period) {
   return output;
 }
 
+async function loadRealCandles(symbol) {
+  const errors = [];
+
+  try {
+    const candles = await fetchYahoo(symbol);
+    setCachedCandles(symbol, candles);
+    state.provider = "Yahoo daily close";
+    return candles;
+  } catch (error) {
+    errors.push(`Yahoo: ${error.message}`);
+  }
+
+  try {
+    const candles = await fetchStooq(symbol);
+    setCachedCandles(symbol, candles);
+    state.provider = "Stooq daily close";
+    return candles;
+  } catch (error) {
+    errors.push(`Stooq: ${error.message}`);
+  }
+
+  try {
+    const candles = await fetchFinnhubCandles(symbol);
+    setCachedCandles(symbol, candles);
+    state.provider = "Finnhub daily close";
+    return candles;
+  } catch (error) {
+    errors.push(`Finnhub: ${error.message}`);
+  }
+
+  throw new Error(errors.join(" | "));
+}
+
+function renderLoadError(symbol) {
+  $("chartTitle").textContent = symbol;
+  $("lastPrice").textContent = "-";
+  $("lastPriceDate").textContent = "โหลดราคาปิดล่าสุดไม่ได้";
+  $("trendState").textContent = "-";
+  $("accumulationZone").textContent = "-";
+  $("zoneReason").textContent = "ยังโหลด daily candles จริงไม่ได้ จึงไม่คำนวณโซนสะสม";
+  $("macdSummary").textContent = "-";
+  $("macdDetail").textContent = "ต้องมีข้อมูลกราฟจริงก่อนจึงคำนวณ MACD ได้";
+  $("supportList").innerHTML = "";
+  $("resistanceList").innerHTML = "";
+  $("statusPill").textContent = "โหลดข้อมูลไม่ได้";
+  $("dataSource").textContent = "Real daily data unavailable";
+  drawMessageChart("โหลดกราฟราคาจริงไม่ได้");
+}
+
+function drawMessageChart(message) {
+  const canvas = $("priceChart");
+  const ctx = canvas.getContext("2d");
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(rect.width * dpr);
+  canvas.height = Math.round(rect.height * dpr);
+  ctx.scale(dpr, dpr);
+  ctx.fillStyle = "#fbfcfb";
+  ctx.fillRect(0, 0, rect.width, rect.height);
+  ctx.fillStyle = "#61727c";
+  ctx.font = "700 16px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText(message, rect.width / 2, rect.height / 2);
+  ctx.textAlign = "left";
+}
+
 async function runAnalysis(symbol = state.symbol) {
   const cleanSymbol = normalizeSymbol(symbol) || "AAPL";
   const requestId = state.requestId + 1;
@@ -955,103 +889,26 @@ async function runAnalysis(symbol = state.symbol) {
   $("statusPill").textContent = "กำลังโหลด...";
 
   let candles = getCachedCandles(cleanSymbol);
-  let isSample = false;
-  let quote = null;
 
-  const quotePromise = fetchFinnhubQuote(cleanSymbol).catch(() => fetchYahooQuote(cleanSymbol)).catch(() => null);
-
-  if (USE_CLASSIC_DEMO_CHART) {
-    quote = await quotePromise;
-    candles = makeSampleData(cleanSymbol);
-    if (quote) candles = anchorCandlesToPrice(candles, quote.price);
-    isSample = true;
-    state.provider = quote ? "Classic demo chart anchored to latest quote" : "Classic demo chart";
-  } else if (!candles) {
-    const chartFirst = () => PREFER_YAHOO_CHART ? fetchYahoo(cleanSymbol) : fetchFinnhubCandles(cleanSymbol);
-    const chartFallback = () => PREFER_YAHOO_CHART ? fetchFinnhubCandles(cleanSymbol) : fetchYahoo(cleanSymbol);
-    const candleResult = await chartFirst()
-      .then((data) => ({ ok: true, data }))
-      .catch((error) => ({ ok: false, error }));
-    quote = await quotePromise;
-
-    if (candleResult.ok) {
-      candles = candleResult.data;
-      setCachedCandles(cleanSymbol, candles);
-      if (PREFER_YAHOO_CHART) {
-        state.provider = quote ? "Yahoo chart + Finnhub quote" : "Yahoo chart";
-      } else {
-        state.provider = quote ? "Finnhub candles + quote" : "Finnhub daily candles";
-      }
-    } else {
-      try {
-        candles = await chartFallback();
-        setCachedCandles(cleanSymbol, candles);
-        if (PREFER_YAHOO_CHART) {
-          state.provider = quote ? "Finnhub candles + quote" : "Finnhub daily candles";
-        } else {
-          state.provider = quote ? "Yahoo chart + Finnhub quote" : "Yahoo Finance daily chart";
-        }
-      } catch (yahooError) {
-        try {
-          candles = await fetchStooq(cleanSymbol);
-          setCachedCandles(cleanSymbol, candles);
-          state.provider = quote ? "Stooq chart + Finnhub quote" : "Stooq daily chart";
-        } catch (stooqError) {
-          if (!quote) quote = await quotePromise;
-          candles = makeSampleData(cleanSymbol);
-          if (quote) {
-            candles = anchorCandlesToPrice(candles, quote.price);
-            state.provider = "Demo fallback data anchored to latest quote";
-          } else {
-            state.provider = "Demo fallback data";
-          }
-          isSample = true;
-        }
-      }
-    }
-  } else if (!USE_CLASSIC_DEMO_CHART) {
-    quote = await quotePromise;
-    state.provider = "Cached daily candles";
-  }
-
-  if (!quote && !isSample && !USE_CLASSIC_DEMO_CHART) {
+  if (candles) {
+    state.provider = "Cached real daily close";
+  } else {
     try {
-      quote = await fetchFinnhubQuote(cleanSymbol);
-    } catch (quoteError) {
-      if (!FAST_MODE) {
-        try {
-          quote = await fetchYahooQuote(cleanSymbol);
-        } catch (yahooQuoteError) {
-          quote = null;
-        }
-      } else {
-        quote = null;
-      }
-    }
-  }
-
-  if (!candles) {
-    try {
-      candles = await fetchFinnhubCandles(cleanSymbol);
+      candles = await loadRealCandles(cleanSymbol);
     } catch (error) {
-      candles = makeSampleData(cleanSymbol);
-      if (quote) candles = anchorCandlesToPrice(candles, quote.price);
-      isSample = true;
-      state.provider = quote ? "Demo fallback data anchored to latest quote" : "Demo fallback data";
+      if (requestId !== state.requestId) return;
+      renderLoadError(cleanSymbol);
+      return;
     }
   }
 
   const lookback = Number($("lookbackSelect").value);
   const riskMode = $("riskSelect").value;
-  if (isSample && quote) {
-    candles = anchorCandlesToPrice(candles, quote.price);
-    state.provider = "Demo fallback data anchored to latest quote";
-  }
   if (requestId !== state.requestId) return;
   state.candles = candles;
-  state.quote = quote;
-  state.analysis = analyze(candles, lookback, riskMode, quote);
-  updateSummary(cleanSymbol, state.analysis, isSample);
+  state.quote = null;
+  state.analysis = analyze(candles, lookback, riskMode, null);
+  updateSummary(cleanSymbol, state.analysis, false);
   drawChart();
 }
 
