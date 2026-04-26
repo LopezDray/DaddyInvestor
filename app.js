@@ -5,6 +5,7 @@ const state = {
   analysis: null,
   symbol: "AAPL",
   provider: "Stooq free daily data",
+  quote: null,
 };
 
 const sampleSymbols = {
@@ -34,6 +35,19 @@ function formatMarketDate(dateText) {
   });
 }
 
+function formatQuoteTime(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 function normalizeSymbol(raw) {
   return raw.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, "");
 }
@@ -53,10 +67,7 @@ async function fetchStooq(symbol) {
 
 async function fetchYahoo(symbol) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5y&interval=1d&events=history&includeAdjustedClose=true`;
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) throw new Error("โหลด Yahoo Finance ไม่ได้");
-
-  const payload = await response.json();
+  const payload = await fetchJson(url, "Yahoo Finance daily chart");
   const result = payload?.chart?.result?.[0];
   const quote = result?.indicators?.quote?.[0];
   const timestamps = result?.timestamp;
@@ -81,8 +92,35 @@ async function fetchYahoo(symbol) {
     .filter((candle) => isCompletedMarketDate(candle.date));
 
   if (candles.length < 240) throw new Error("ข้อมูล Yahoo Finance ย้อนหลังไม่พอ");
-  state.provider = "Yahoo Finance daily chart";
   return candles;
+}
+
+async function fetchYahooQuote(symbol) {
+  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbol)}`;
+  const payload = await fetchJson(url, "Yahoo Finance quote");
+  const quote = payload?.quoteResponse?.result?.[0];
+  const price = Number(quote?.regularMarketPrice);
+  if (!Number.isFinite(price) || price <= 0) throw new Error("ไม่มีราคาล่าสุดจาก Yahoo quote");
+
+  return {
+    price,
+    previousClose: Number(quote?.regularMarketPreviousClose),
+    time: quote?.regularMarketTime ? new Date(quote.regularMarketTime * 1000) : new Date(),
+    marketState: quote?.marketState || "",
+    source: "Yahoo Finance quote",
+  };
+}
+
+async function fetchJson(url, providerName) {
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) throw new Error("direct request failed");
+    state.provider = providerName;
+    return response.json();
+  } catch (error) {
+    const text = await fetchViaProxy(url, `${providerName} via free CORS proxy`);
+    return JSON.parse(text);
+  }
 }
 
 function isCompletedMarketDate(dateText) {
@@ -111,12 +149,16 @@ async function fetchText(url) {
     state.provider = "Stooq free daily data";
     return response.text();
   } catch (error) {
-    const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-    const response = await fetch(proxy, { cache: "no-store" });
-    if (!response.ok) throw new Error("proxy request failed");
-    state.provider = "Stooq via free CORS proxy";
-    return response.text();
+    return fetchViaProxy(url, "Stooq via free CORS proxy");
   }
+}
+
+async function fetchViaProxy(url, providerName) {
+  const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+  const response = await fetch(proxy, { cache: "no-store" });
+  if (!response.ok) throw new Error("proxy request failed");
+  state.provider = providerName;
+  return response.text();
 }
 
 function parseStooqCsv(csv) {
@@ -277,7 +319,7 @@ function nearestPivots(candles) {
   return pivots.slice(-36);
 }
 
-function analyze(candles, lookback, riskMode) {
+function analyze(candles, lookback, riskMode, quote = null) {
   const scoped = candles.slice(-lookback);
   const weekly = toWeeklyCandles(candles);
   const weeklyCloses = weekly.map((candle) => candle.close);
@@ -287,7 +329,8 @@ function analyze(candles, lookback, riskMode) {
   const highs = scoped.map((candle) => candle.high);
   const lows = scoped.map((candle) => candle.low);
   const latest = scoped.at(-1);
-  const last = latest.close;
+  const displayPrice = Number.isFinite(quote?.price) ? quote.price : latest.close;
+  const last = displayPrice;
   const high = Math.max(...highs);
   const low = Math.min(...lows);
   const range = high - low;
@@ -373,6 +416,8 @@ function analyze(candles, lookback, riskMode) {
     scoped,
     closes,
     latest,
+    displayPrice,
+    quote,
     high,
     low,
     fib,
@@ -421,8 +466,10 @@ function renderLists(analysis) {
 
 function updateSummary(symbol, analysis, isSample) {
   $("chartTitle").textContent = symbol;
-  $("lastPrice").textContent = money(analysis.latest.close);
-  $("lastPriceDate").textContent = `ปิดตลาด ${formatMarketDate(analysis.latest.date)}`;
+  $("lastPrice").textContent = money(analysis.displayPrice);
+  $("lastPriceDate").textContent = analysis.quote
+    ? `อัปเดต ${formatQuoteTime(analysis.quote.time)}${analysis.quote.marketState ? ` · ${analysis.quote.marketState}` : ""}`
+    : `ปิดตลาด ${formatMarketDate(analysis.latest.date)}`;
   $("trendState").textContent = analysis.trendState;
   $("accumulationZone").textContent = `${money(analysis.zoneBottom)} - ${money(analysis.zoneTop)}`;
   $("fiboSummary").textContent = `${money(analysis.fib["50.0"])} / ${money(analysis.fib["61.8"])}`;
@@ -431,7 +478,7 @@ function updateSummary(symbol, analysis, isSample) {
 
   const scoreText = analysis.score >= 80 ? "โซนสะสมแข็งแรง" : analysis.score >= 60 ? "เริ่มน่าสนใจ" : analysis.score >= 40 ? "รอดูต่อ" : "ยังไม่เข้าเงื่อนไข";
   $("zoneReason").textContent = `${scoreText}: ราคาอยู่ห่าง EMA200 ${pct(analysis.emaDistance)} และเทรนด์คือ ${analysis.trendState}`;
-  $("statusPill").textContent = isSample ? "ใช้ข้อมูลตัวอย่าง" : "ข้อมูลจริงรายวัน";
+  $("statusPill").textContent = isSample ? "ใช้ข้อมูลตัวอย่าง" : analysis.quote ? "ราคาล่าสุด" : "ข้อมูลจริงรายวัน";
   $("dataSource").textContent = isSample ? "Demo fallback data" : state.provider;
   renderLists(analysis);
 }
@@ -618,8 +665,14 @@ async function runAnalysis(symbol = state.symbol) {
 
   let candles;
   let isSample = false;
+  let quote = null;
   try {
     candles = await fetchYahoo(cleanSymbol);
+    try {
+      quote = await fetchYahooQuote(cleanSymbol);
+    } catch (quoteError) {
+      quote = null;
+    }
   } catch (yahooError) {
     try {
       candles = await fetchStooq(cleanSymbol);
@@ -633,7 +686,8 @@ async function runAnalysis(symbol = state.symbol) {
   const lookback = Number($("lookbackSelect").value);
   const riskMode = $("riskSelect").value;
   state.candles = candles;
-  state.analysis = analyze(candles, lookback, riskMode);
+  state.quote = quote;
+  state.analysis = analyze(candles, lookback, riskMode, quote);
   updateSummary(cleanSymbol, state.analysis, isSample);
   drawChart();
 }
