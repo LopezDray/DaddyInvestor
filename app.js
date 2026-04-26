@@ -1,6 +1,9 @@
 const $ = (id) => document.getElementById(id);
 
 const FINNHUB_API_KEY = "d7mvaa9r01qngrvpii50d7mvaa9r01qngrvpii5g";
+const FAST_MODE = true;
+const REQUEST_TIMEOUT_MS = 3000;
+const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
 
 const state = {
   candles: [],
@@ -15,6 +18,7 @@ const sampleSymbols = {
   AAPL: { base: 185, drift: 0.035, wave: 18 },
   BABA: { base: 82, drift: 0.018, wave: 13 },
   TSM: { base: 158, drift: 0.04, wave: 24 },
+  TSLA: { base: 330, drift: 0.045, wave: 70 },
 };
 
 function money(value) {
@@ -62,6 +66,28 @@ function getFinnhubKey() {
 function toStooqSymbol(symbol) {
   if (symbol.includes(".")) return symbol.toLowerCase();
   return `${symbol}.us`.toLowerCase();
+}
+
+function cacheKey(symbol) {
+  return `daddyInvestorCandles:${symbol}`;
+}
+
+function getCachedCandles(symbol) {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(cacheKey(symbol)) || "null");
+    if (!cached || Date.now() - cached.savedAt > CACHE_TTL_MS || !Array.isArray(cached.candles)) return null;
+    return cached.candles;
+  } catch (error) {
+    return null;
+  }
+}
+
+function setCachedCandles(symbol, candles) {
+  try {
+    sessionStorage.setItem(cacheKey(symbol), JSON.stringify({ savedAt: Date.now(), candles }));
+  } catch (error) {
+    // Ignore cache quota limits.
+  }
 }
 
 async function fetchStooq(symbol) {
@@ -165,13 +191,24 @@ async function fetchFinnhubQuote(symbol) {
 
 async function fetchJson(url, providerName) {
   try {
-    const response = await fetch(url, { cache: "no-store" });
+    const response = await fetchWithTimeout(url, { cache: "no-store" });
     if (!response.ok) throw new Error("direct request failed");
     state.provider = providerName;
     return response.json();
   } catch (error) {
+    if (FAST_MODE || providerName.includes("Finnhub")) throw error;
     const text = await fetchViaProxy(url, `${providerName} via free CORS proxy`);
     return JSON.parse(text);
+  }
+}
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
   }
 }
 
@@ -196,7 +233,7 @@ function isCompletedMarketDate(dateText) {
 
 async function fetchText(url) {
   try {
-    const response = await fetch(url, { cache: "no-store" });
+    const response = await fetchWithTimeout(url, { cache: "no-store" });
     if (!response.ok) throw new Error("direct request failed");
     state.provider = "Stooq free daily data";
     return response.text();
@@ -207,7 +244,7 @@ async function fetchText(url) {
 
 async function fetchViaProxy(url, providerName) {
   const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-  const response = await fetch(proxy, { cache: "no-store" });
+  const response = await fetchWithTimeout(proxy, { cache: "no-store" });
   if (!response.ok) throw new Error("proxy request failed");
   state.provider = providerName;
   return response.text();
@@ -263,13 +300,17 @@ function anchorCandlesToPrice(candles, targetPrice) {
   const lastClose = candles.at(-1)?.close;
   if (!Number.isFinite(lastClose) || !Number.isFinite(targetPrice) || targetPrice <= 0) return candles;
   const multiplier = targetPrice / lastClose;
-  return candles.map((candle) => ({
+  const anchored = candles.map((candle) => ({
     ...candle,
     open: candle.open * multiplier,
     high: candle.high * multiplier,
     low: candle.low * multiplier,
     close: candle.close * multiplier,
   }));
+  anchored[anchored.length - 1].close = targetPrice;
+  anchored[anchored.length - 1].high = Math.max(anchored.at(-1).high, targetPrice);
+  anchored[anchored.length - 1].low = Math.min(anchored.at(-1).low, targetPrice);
+  return anchored;
 }
 
 function sma(values, period) {
@@ -559,7 +600,10 @@ function drawChart() {
 
   const width = rect.width;
   const height = rect.height;
-  const pad = { top: 24, right: 172, bottom: 34, left: 78 };
+  const isMobile = window.innerWidth <= 620;
+  const pad = isMobile
+    ? { top: 18, right: 124, bottom: 32, left: 66 }
+    : { top: 24, right: 172, bottom: 34, left: 78 };
   ctx.clearRect(0, 0, width, height);
 
   if (!state.analysis) return;
@@ -608,12 +652,12 @@ function drawChart() {
 
   const supportLabels = a.supports.map((level, index) => ({
     ...level,
-    code: `แนวรับ ${index + 1}`,
+    code: window.innerWidth <= 620 ? `รับ ${index + 1}` : `แนวรับ ${index + 1}`,
     kind: "support",
   }));
   const resistanceLabels = a.resistances.map((level, index) => ({
     ...level,
-    code: `แนวต้าน ${index + 1}`,
+    code: window.innerWidth <= 620 ? `ต้าน ${index + 1}` : `แนวต้าน ${index + 1}`,
     kind: "resistance",
   }));
   const allLevelLabels = [...supportLabels, ...resistanceLabels];
@@ -669,7 +713,7 @@ function drawLevelBadges(ctx, levels, y, rightEdge, minY, maxY) {
 
   badges.forEach((badge) => {
     const isSupport = badge.kind === "support";
-    const boxWidth = 136;
+    const boxWidth = window.innerWidth <= 620 ? 96 : 136;
     const boxX = rightEdge + 8;
     const boxY = badge.y - badgeHeight / 2;
     const color = isSupport ? "#16715f" : "#b34747";
@@ -688,7 +732,7 @@ function drawLevelBadges(ctx, levels, y, rightEdge, minY, maxY) {
     ctx.stroke();
 
     ctx.fillStyle = color;
-    ctx.font = "700 11px Arial";
+    ctx.font = window.innerWidth <= 620 ? "700 10px Arial" : "700 11px Arial";
     ctx.fillText(`${badge.code} ${money(badge.value)}`, boxX + 8, badge.y + 4);
   });
 }
@@ -728,63 +772,81 @@ async function runAnalysis(symbol = state.symbol) {
   state.symbol = cleanSymbol;
   $("statusPill").textContent = "กำลังโหลด...";
 
-  let candles;
+  let candles = getCachedCandles(cleanSymbol);
   let isSample = false;
   let quote = null;
-  try {
-    candles = await fetchFinnhubCandles(cleanSymbol);
-    try {
-      quote = await fetchFinnhubQuote(cleanSymbol);
-    } catch (quoteError) {
-      quote = null;
-    }
-  } catch (finnhubError) {
-    try {
-      candles = await fetchYahoo(cleanSymbol);
+
+  const quotePromise = fetchFinnhubQuote(cleanSymbol).catch(() => fetchYahooQuote(cleanSymbol)).catch(() => null);
+
+  if (!candles) {
+    const candleResult = await fetchFinnhubCandles(cleanSymbol)
+      .then((data) => ({ ok: true, data }))
+      .catch((error) => ({ ok: false, error }));
+    quote = await quotePromise;
+
+    if (candleResult.ok) {
+      candles = candleResult.data;
+      setCachedCandles(cleanSymbol, candles);
+    } else {
       try {
-        quote = await fetchYahooQuote(cleanSymbol);
-      } catch (quoteError) {
-        quote = null;
-      }
-    } catch (yahooError) {
-      try {
-        candles = await fetchStooq(cleanSymbol);
-      } catch (stooqError) {
+        if (FAST_MODE) throw candleResult.error;
+        candles = await fetchYahoo(cleanSymbol);
+        setCachedCandles(cleanSymbol, candles);
+      } catch (yahooError) {
         try {
-          quote = await fetchFinnhubQuote(cleanSymbol);
-        } catch (fallbackQuoteError) {
-          try {
-            quote = await fetchYahooQuote(cleanSymbol);
-          } catch (yahooFallbackQuoteError) {
-            quote = null;
+          candles = await fetchStooq(cleanSymbol);
+          setCachedCandles(cleanSymbol, candles);
+        } catch (stooqError) {
+          if (!quote) quote = await quotePromise;
+          candles = makeSampleData(cleanSymbol);
+          if (quote) {
+            candles = anchorCandlesToPrice(candles, quote.price);
+            state.provider = "Demo fallback data anchored to latest quote";
+          } else {
+            state.provider = "Demo fallback data";
           }
+          isSample = true;
         }
-        candles = makeSampleData(cleanSymbol);
-        if (quote) {
-          candles = anchorCandlesToPrice(candles, quote.price);
-          state.provider = "Demo fallback data anchored to latest quote";
-        } else {
-          state.provider = "Demo fallback data";
-        }
-        isSample = true;
       }
     }
+  } else {
+    quote = await quotePromise;
+    state.provider = "Cached daily candles";
   }
 
   if (!quote && !isSample) {
     try {
       quote = await fetchFinnhubQuote(cleanSymbol);
     } catch (quoteError) {
-      try {
-        quote = await fetchYahooQuote(cleanSymbol);
-      } catch (yahooQuoteError) {
+      if (!FAST_MODE) {
+        try {
+          quote = await fetchYahooQuote(cleanSymbol);
+        } catch (yahooQuoteError) {
+          quote = null;
+        }
+      } else {
         quote = null;
       }
     }
   }
 
+  if (!candles) {
+    try {
+      candles = await fetchFinnhubCandles(cleanSymbol);
+    } catch (error) {
+      candles = makeSampleData(cleanSymbol);
+      if (quote) candles = anchorCandlesToPrice(candles, quote.price);
+      isSample = true;
+      state.provider = quote ? "Demo fallback data anchored to latest quote" : "Demo fallback data";
+    }
+  }
+
   const lookback = Number($("lookbackSelect").value);
   const riskMode = $("riskSelect").value;
+  if (isSample && quote) {
+    candles = anchorCandlesToPrice(candles, quote.price);
+    state.provider = "Demo fallback data anchored to latest quote";
+  }
   state.candles = candles;
   state.quote = quote;
   state.analysis = analyze(candles, lookback, riskMode, quote);
