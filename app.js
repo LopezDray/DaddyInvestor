@@ -3,10 +3,11 @@ const $ = (id) => document.getElementById(id);
 const FINNHUB_API_KEY = "d7mvaa9r01qngrvpii50d7mvaa9r01qngrvpii5g";
 const FAST_MODE = true;
 const USE_CLASSIC_DEMO_CHART = false;
+const PREFER_YAHOO_CHART = true;
 const QUOTE_TIMEOUT_MS = 3000;
-const CHART_TIMEOUT_MS = 9000;
+const CHART_TIMEOUT_MS = 4500;
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
-const DATA_CACHE_VERSION = "real-candles-v4";
+const DATA_CACHE_VERSION = "yahoo-first-v2";
 const DISPLAY_SMOOTH_DAYS = 5;
 
 const state = {
@@ -105,21 +106,21 @@ async function fetchStooq(symbol) {
 }
 
 async function fetchYahoo(symbol) {
-  const bases = ["query1.finance.yahoo.com", "query2.finance.yahoo.com"];
-  const ranges = ["5y", "2y", "1y"];
-  let lastError = null;
-
-  for (const base of bases) {
-    for (const range of ranges) {
-      try {
-        return await fetchYahooRange(symbol, base, range);
-      } catch (error) {
-        lastError = error;
-      }
+  try {
+    return await Promise.any([
+      fetchYahooRange(symbol, "query1.finance.yahoo.com", "1y"),
+      fetchYahooRange(symbol, "query2.finance.yahoo.com", "1y"),
+    ]);
+  } catch (oneYearError) {
+    try {
+      return await fetchYahooPeriod(symbol);
+    } catch (periodError) {
+      return Promise.any([
+        fetchYahooRange(symbol, "query1.finance.yahoo.com", "2y"),
+        fetchYahooRange(symbol, "query2.finance.yahoo.com", "2y"),
+      ]);
     }
   }
-
-  throw lastError || new Error("Yahoo Finance ไม่มีข้อมูลกราฟ");
 }
 
 async function fetchYahooRange(symbol, base, range) {
@@ -150,6 +151,39 @@ async function fetchYahooRange(symbol, base, range) {
 
   if (candles.length < 180) throw new Error(`ข้อมูล Yahoo Finance ${range} ย้อนหลังไม่พอ`);
   state.provider = `Yahoo chart ${range}`;
+  return candles;
+}
+
+async function fetchYahooPeriod(symbol) {
+  const now = Math.floor(Date.now() / 1000);
+  const oneYearAgo = now - 60 * 60 * 24 * 370;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${oneYearAgo}&period2=${now}&interval=1d&events=history&includeAdjustedClose=true`;
+  const payload = await fetchJson(url, "Yahoo chart period");
+  const result = payload?.chart?.result?.[0];
+  const quote = result?.indicators?.quote?.[0];
+  const timestamps = result?.timestamp;
+  if (!result || !quote || !Array.isArray(timestamps)) throw new Error("รูปแบบข้อมูล Yahoo period ไม่ถูกต้อง");
+
+  const adjusted = result.indicators?.adjclose?.[0]?.adjclose || [];
+  const gmtoffset = result.meta?.gmtoffset || 0;
+  const candles = timestamps
+    .map((timestamp, index) => {
+      const date = new Date((timestamp + gmtoffset) * 1000).toISOString().slice(0, 10);
+      const close = Number(adjusted[index] ?? quote.close?.[index]);
+      return {
+        date,
+        open: Number(quote.open?.[index]),
+        high: Number(quote.high?.[index]),
+        low: Number(quote.low?.[index]),
+        close,
+        volume: Number(quote.volume?.[index]),
+      };
+    })
+    .filter((candle) => candle.date && Number.isFinite(candle.close) && candle.close > 0)
+    .filter((candle) => isCompletedMarketDate(candle.date));
+
+  if (candles.length < 180) throw new Error("ข้อมูล Yahoo period ย้อนหลังไม่พอ");
+  state.provider = "Yahoo chart period";
   return candles;
 }
 
@@ -907,8 +941,9 @@ async function runAnalysis(symbol = state.symbol) {
     isSample = true;
     state.provider = quote ? "Classic demo chart anchored to latest quote" : "Classic demo chart";
   } else if (!candles) {
-
-    const candleResult = await fetchFinnhubCandles(cleanSymbol)
+    const chartFirst = () => PREFER_YAHOO_CHART ? fetchYahoo(cleanSymbol) : fetchFinnhubCandles(cleanSymbol);
+    const chartFallback = () => PREFER_YAHOO_CHART ? fetchFinnhubCandles(cleanSymbol) : fetchYahoo(cleanSymbol);
+    const candleResult = await chartFirst()
       .then((data) => ({ ok: true, data }))
       .catch((error) => ({ ok: false, error }));
     quote = await quotePromise;
@@ -916,12 +951,20 @@ async function runAnalysis(symbol = state.symbol) {
     if (candleResult.ok) {
       candles = candleResult.data;
       setCachedCandles(cleanSymbol, candles);
-      state.provider = quote ? "Finnhub candles + quote" : "Finnhub daily candles";
+      if (PREFER_YAHOO_CHART) {
+        state.provider = quote ? "Yahoo chart + Finnhub quote" : "Yahoo chart";
+      } else {
+        state.provider = quote ? "Finnhub candles + quote" : "Finnhub daily candles";
+      }
     } else {
       try {
-        candles = await fetchYahoo(cleanSymbol);
+        candles = await chartFallback();
         setCachedCandles(cleanSymbol, candles);
-        state.provider = quote ? "Yahoo chart + Finnhub quote" : "Yahoo Finance daily chart";
+        if (PREFER_YAHOO_CHART) {
+          state.provider = quote ? "Finnhub candles + quote" : "Finnhub daily candles";
+        } else {
+          state.provider = quote ? "Yahoo chart + Finnhub quote" : "Yahoo Finance daily chart";
+        }
       } catch (yahooError) {
         try {
           candles = await fetchStooq(cleanSymbol);
