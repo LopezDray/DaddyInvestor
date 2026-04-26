@@ -3,9 +3,10 @@ const $ = (id) => document.getElementById(id);
 const FINNHUB_API_KEY = "d7mvaa9r01qngrvpii50d7mvaa9r01qngrvpii5g";
 const FAST_MODE = true;
 const USE_CLASSIC_DEMO_CHART = false;
-const REQUEST_TIMEOUT_MS = 4000;
+const QUOTE_TIMEOUT_MS = 3000;
+const CHART_TIMEOUT_MS = 9000;
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
-const DATA_CACHE_VERSION = "real-candles-v3";
+const DATA_CACHE_VERSION = "real-candles-v4";
 const DISPLAY_SMOOTH_DAYS = 5;
 
 const state = {
@@ -15,6 +16,7 @@ const state = {
   provider: "Stooq free daily data",
   quote: null,
   finnhubKey: "",
+  requestId: 0,
 };
 
 const sampleSymbols = {
@@ -226,7 +228,7 @@ async function fetchFinnhubQuote(symbol) {
 
 async function fetchJson(url, providerName) {
   try {
-    const response = await fetchWithTimeout(url, { cache: "no-store" });
+    const response = await fetchWithTimeout(url, { cache: "no-store" }, timeoutForProvider(providerName));
     if (!response.ok) throw new Error("direct request failed");
     state.provider = providerName;
     return response.json();
@@ -237,9 +239,16 @@ async function fetchJson(url, providerName) {
   }
 }
 
-async function fetchWithTimeout(url, options = {}) {
+function timeoutForProvider(providerName) {
+  const name = providerName.toLowerCase();
+  if (name.includes("quote")) return QUOTE_TIMEOUT_MS;
+  if (name.includes("chart") || name.includes("candle")) return CHART_TIMEOUT_MS;
+  return CHART_TIMEOUT_MS;
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = CHART_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...options, signal: controller.signal });
   } finally {
@@ -268,7 +277,7 @@ function isCompletedMarketDate(dateText) {
 
 async function fetchText(url) {
   try {
-    const response = await fetchWithTimeout(url, { cache: "no-store" });
+    const response = await fetchWithTimeout(url, { cache: "no-store" }, CHART_TIMEOUT_MS);
     if (!response.ok) throw new Error("direct request failed");
     state.provider = "Stooq free daily data";
     return response.text();
@@ -279,7 +288,7 @@ async function fetchText(url) {
 
 async function fetchViaProxy(url, providerName) {
   const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-  const response = await fetchWithTimeout(proxy, { cache: "no-store" });
+  const response = await fetchWithTimeout(proxy, { cache: "no-store" }, timeoutForProvider(providerName));
   if (!response.ok) throw new Error("proxy request failed");
   state.provider = providerName;
   return response.text();
@@ -880,6 +889,8 @@ function smoothDisplaySeries(series, period) {
 
 async function runAnalysis(symbol = state.symbol) {
   const cleanSymbol = normalizeSymbol(symbol) || "AAPL";
+  const requestId = state.requestId + 1;
+  state.requestId = requestId;
   state.symbol = cleanSymbol;
   $("statusPill").textContent = "กำลังโหลด...";
 
@@ -967,6 +978,7 @@ async function runAnalysis(symbol = state.symbol) {
     candles = anchorCandlesToPrice(candles, quote.price);
     state.provider = "Demo fallback data anchored to latest quote";
   }
+  if (requestId !== state.requestId) return;
   state.candles = candles;
   state.quote = quote;
   state.analysis = analyze(candles, lookback, riskMode, quote);
