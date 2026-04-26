@@ -5,7 +5,7 @@ const FAST_MODE = true;
 const USE_CLASSIC_DEMO_CHART = false;
 const REQUEST_TIMEOUT_MS = 4000;
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
-const DATA_CACHE_VERSION = "real-candles-v2";
+const DATA_CACHE_VERSION = "real-candles-v3";
 const DISPLAY_SMOOTH_DAYS = 5;
 
 const state = {
@@ -97,13 +97,32 @@ async function fetchStooq(symbol) {
   const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(toStooqSymbol(symbol))}&i=d`;
   const csv = await fetchText(url);
   const candles = parseStooqCsv(csv);
-  if (candles.length < 240) throw new Error("ข้อมูลย้อนหลังไม่พอสำหรับคำนวณระยะยาว");
+  if (candles.length < 180) throw new Error("ข้อมูลย้อนหลังไม่พอสำหรับคำนวณระยะยาว");
+  state.provider = "Stooq daily chart";
   return candles;
 }
 
 async function fetchYahoo(symbol) {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5y&interval=1d&events=history&includeAdjustedClose=true`;
-  const payload = await fetchJson(url, "Yahoo Finance daily chart");
+  const bases = ["query1.finance.yahoo.com", "query2.finance.yahoo.com"];
+  const ranges = ["5y", "2y", "1y"];
+  let lastError = null;
+
+  for (const base of bases) {
+    for (const range of ranges) {
+      try {
+        return await fetchYahooRange(symbol, base, range);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+  }
+
+  throw lastError || new Error("Yahoo Finance ไม่มีข้อมูลกราฟ");
+}
+
+async function fetchYahooRange(symbol, base, range) {
+  const url = `https://${base}/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d&events=history&includeAdjustedClose=true`;
+  const payload = await fetchJson(url, `Yahoo chart ${range}`);
   const result = payload?.chart?.result?.[0];
   const quote = result?.indicators?.quote?.[0];
   const timestamps = result?.timestamp;
@@ -127,7 +146,8 @@ async function fetchYahoo(symbol) {
     .filter((candle) => candle.date && Number.isFinite(candle.close) && candle.close > 0)
     .filter((candle) => isCompletedMarketDate(candle.date));
 
-  if (candles.length < 240) throw new Error("ข้อมูล Yahoo Finance ย้อนหลังไม่พอ");
+  if (candles.length < 180) throw new Error(`ข้อมูล Yahoo Finance ${range} ย้อนหลังไม่พอ`);
+  state.provider = `Yahoo chart ${range}`;
   return candles;
 }
 
@@ -893,9 +913,9 @@ async function runAnalysis(symbol = state.symbol) {
         state.provider = quote ? "Yahoo chart + Finnhub quote" : "Yahoo Finance daily chart";
       } catch (yahooError) {
         try {
-          if (FAST_MODE) throw yahooError;
           candles = await fetchStooq(cleanSymbol);
           setCachedCandles(cleanSymbol, candles);
+          state.provider = quote ? "Stooq chart + Finnhub quote" : "Stooq daily chart";
         } catch (stooqError) {
           if (!quote) quote = await quotePromise;
           candles = makeSampleData(cleanSymbol);
