@@ -4,7 +4,7 @@ const FINNHUB_API_KEY = "d7mvaa9r01qngrvpii50d7mvaa9r01qngrvpii5g";
 const FAST_MODE = true;
 const CHART_TIMEOUT_MS = 4500;
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
-const DATA_CACHE_VERSION = "close-canonical-v1";
+const DATA_CACHE_VERSION = "close-canonical-v2";
 const DISPLAY_SMOOTH_DAYS = 1;
 
 const state = {
@@ -56,18 +56,48 @@ function cacheKey(symbol) {
 }
 
 function getCachedCandles(symbol) {
+  const stores = [sessionStorage, localStorage];
   try {
-    const cached = JSON.parse(sessionStorage.getItem(cacheKey(symbol)) || "null");
-    if (!cached || Date.now() - cached.savedAt > CACHE_TTL_MS || !Array.isArray(cached.candles)) return null;
-    return cached.candles;
+    for (const store of stores) {
+      const current = readCachedCandles(store.getItem(cacheKey(symbol)));
+      if (current) return current;
+    }
+
+    const suffix = `:${symbol}`;
+    const candidates = [];
+    for (const store of stores) {
+      for (let index = 0; index < store.length; index += 1) {
+        const key = store.key(index);
+        if (key?.startsWith("daddyInvestorCandles:") && key.endsWith(suffix)) {
+          const cached = JSON.parse(store.getItem(key) || "null");
+          if (cached?.savedAt && Array.isArray(cached.candles)) candidates.push(cached);
+        }
+      }
+    }
+
+    candidates.sort((a, b) => b.savedAt - a.savedAt);
+    for (const cached of candidates) {
+      const candles = readCachedCandles(JSON.stringify(cached));
+      if (candles) return candles;
+    }
+    return null;
   } catch (error) {
     return null;
   }
 }
 
+function readCachedCandles(raw) {
+  const cached = JSON.parse(raw || "null");
+  if (!cached || Date.now() - cached.savedAt > CACHE_TTL_MS || !Array.isArray(cached.candles)) return null;
+  if (cached.candles.length < 180) return null;
+  return cached.candles;
+}
+
 function setCachedCandles(symbol, candles) {
   try {
-    sessionStorage.setItem(cacheKey(symbol), JSON.stringify({ savedAt: Date.now(), candles }));
+    const payload = JSON.stringify({ savedAt: Date.now(), candles });
+    sessionStorage.setItem(cacheKey(symbol), payload);
+    localStorage.setItem(cacheKey(symbol), payload);
   } catch (error) {
     // Ignore cache quota limits.
   }
@@ -292,11 +322,22 @@ async function fetchText(url) {
 }
 
 async function fetchViaProxy(url, providerName) {
-  const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-  const response = await fetchWithTimeout(proxy, { cache: "no-store" }, timeoutForProvider(providerName));
-  if (!response.ok) throw new Error("proxy request failed");
+  const encoded = encodeURIComponent(url);
+  const proxies = [
+    `https://api.allorigins.win/raw?url=${encoded}`,
+    `https://corsproxy.io/?${encoded}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
+  ];
+
+  const text = await Promise.any(
+    proxies.map((proxy) => fetchWithTimeout(proxy, { cache: "no-store" }, timeoutForProvider(providerName))
+      .then((response) => {
+        if (!response.ok) throw new Error("proxy request failed");
+        return response.text();
+      }))
+  );
   state.provider = providerName;
-  return response.text();
+  return text;
 }
 
 function parseStooqCsv(csv) {
