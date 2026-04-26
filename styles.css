@@ -116,16 +116,11 @@ select {
 }
 
 .search-form label,
-.api-key-box label,
 .setting-grid label {
   display: grid;
   gap: 8px;
   color: #32434b;
   font-weight: 700;
-}
-
-.api-key-box {
-  margin-top: 18px;
 }
 
 .symbol-row {

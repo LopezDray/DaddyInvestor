@@ -56,27 +56,7 @@ function normalizeSymbol(raw) {
 }
 
 function getFinnhubKey() {
-  return FINNHUB_API_KEY || localStorage.getItem("daddyInvestorFinnhubKey") || "";
-}
-
-function setFinnhubKey(key) {
-  const cleanKey = key.trim();
-  if (cleanKey) {
-    localStorage.setItem("daddyInvestorFinnhubKey", cleanKey);
-  } else {
-    localStorage.removeItem("daddyInvestorFinnhubKey");
-  }
-  state.finnhubKey = cleanKey;
-  updateFinnhubKeyStatus();
-}
-
-function updateFinnhubKeyStatus() {
-  const hasKey = Boolean(state.finnhubKey);
-  if (!$("finnhubKeyStatus") || !$("finnhubKeyInput")) return;
-  $("finnhubKeyStatus").textContent = hasKey
-    ? "ใช้ Finnhub เป็นแหล่งข้อมูลหลักแล้ว"
-    : "ถ้าใส่ key ระบบจะใช้ Finnhub เป็นแหล่งข้อมูลหลัก";
-  $("finnhubKeyInput").value = hasKey ? "••••••••••••" : "";
+  return FINNHUB_API_KEY;
 }
 
 function toStooqSymbol(symbol) {
@@ -792,25 +772,7 @@ $("searchForm").addEventListener("submit", (event) => {
 
 $("lookbackSelect").addEventListener("change", () => runAnalysis(state.symbol));
 $("riskSelect").addEventListener("change", () => runAnalysis(state.symbol));
-if ($("saveFinnhubKey") && $("finnhubKeyInput")) {
-  $("saveFinnhubKey").addEventListener("click", () => {
-    const currentValue = $("finnhubKeyInput").value;
-    const nextKey = currentValue.includes("•") ? state.finnhubKey : currentValue;
-    setFinnhubKey(nextKey);
-    runAnalysis(state.symbol);
-  });
-  $("finnhubKeyInput").addEventListener("focus", () => {
-    if ($("finnhubKeyInput").value.includes("•")) $("finnhubKeyInput").value = "";
-  });
-  $("finnhubKeyInput").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      $("saveFinnhubKey").click();
-    }
-  });
-}
 window.addEventListener("resize", drawChart);
 
 state.finnhubKey = getFinnhubKey();
-updateFinnhubKeyStatus();
 runAnalysis("AAPL");
