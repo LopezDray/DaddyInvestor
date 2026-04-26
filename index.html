@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>จังหวะลงทุน</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace">
+        <aside class="control-panel" aria-label="ตั้งค่าการวิเคราะห์">
+          <div class="brand-block">
+            <img class="brand-logo" src="assets/logo.png" alt="คุณพ่อนักลงทุน logo">
+            <p class="eyebrow">US listed stocks</p>
+            <h1>จังหวะลงทุน</h1>
+            <p class="subheadline">คุณพ่อนักลงทุน</p>
+          </div>
+
+          <form class="search-form" id="searchForm">
+            <label for="symbolInput">ชื่อหุ้น</label>
+            <div class="symbol-row">
+              <input id="symbolInput" name="symbol" value="AAPL" placeholder="เช่น AAPL, BABA, TSM" autocomplete="off">
+              <button type="submit">วิเคราะห์</button>
+            </div>
+            <p class="hint">รองรับหุ้น/ADR ที่จดทะเบียนในสหรัฐ เช่น หุ้นอเมริกา หุ้นจีน และบริษัทต่างประเทศที่เทรดใน NYSE/Nasdaq ระบบจะใช้ราคาปิดวันทำการล่าสุดเป็นหลัก</p>
+          </form>
+
+          <div class="setting-grid">
+            <label>
+              ช่วงข้อมูล
+              <select id="lookbackSelect">
+                <option value="252" selected>1 ปี</option>
+                <option value="504">2 ปี</option>
+                <option value="756">3 ปี</option>
+                <option value="1260">5 ปี</option>
+              </select>
+            </label>
+            <label class="is-hidden">
+              สไตล์โซน
+              <select id="riskSelect">
+                <option value="balanced">สมดุล</option>
+                <option value="patient" selected>รอราคาลึก</option>
+                <option value="momentum">เน้นหุ้นแข็ง</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="snapshot" id="snapshot">
+            <div>
+              <span>ราคาปิดล่าสุด</span>
+              <strong id="lastPrice">-</strong>
+              <small id="lastPriceDate">-</small>
+            </div>
+            <div>
+              <span>สถานะเทรนด์</span>
+              <strong id="trendState">-</strong>
+            </div>
+          </div>
+
+          <div class="guide-box">
+            <h2>อ่านแบบเร็ว</h2>
+            <p><b>โซนสะสม</b> คือพื้นที่ที่ราคาลงมาใกล้แนวรับสำคัญและไม่หลุด EMA200 มากเกินไป เหมาะกับการทยอยเก็บระยะยาว ไม่ใช่สัญญาณซื้อทันที</p>
+          </div>
+        </aside>
+
+        <section class="chart-panel" aria-label="ผลวิเคราะห์หุ้น">
+          <div class="chart-header">
+            <div>
+              <p class="eyebrow" id="dataSource">Free daily data</p>
+              <h2 id="chartTitle">AAPL</h2>
+            </div>
+            <div class="status-pill" id="statusPill">พร้อมใช้งาน</div>
+          </div>
+
+          <div class="chart-wrap">
+            <canvas id="priceChart" width="1200" height="620" aria-label="กราฟราคาพร้อมแนวรับแนวต้าน"></canvas>
+          </div>
+
+          <div class="result-grid">
+            <article class="zone-card accumulation">
+              <span>โซนเข้าเก็บระยะยาว</span>
+              <strong id="accumulationZone">-</strong>
+              <p id="zoneReason">รอข้อมูลเพื่อประเมินโซน</p>
+            </article>
+            <article class="zone-card is-hidden">
+              <span>Fibo หลัก</span>
+              <strong id="fiboSummary">-</strong>
+              <p>คำนวณจาก swing high/low ในช่วงที่เลือก</p>
+            </article>
+            <article class="zone-card">
+              <span>MACD</span>
+              <strong id="macdSummary">-</strong>
+              <p id="macdDetail">ดูแรงส่งของราคาในรอบล่าสุด</p>
+            </article>
+          </div>
+
+          <div class="levels">
+            <div>
+              <h3>จังหวะลงทุน</h3>
+              <ol id="supportList"></ol>
+            </div>
+            <div>
+              <h3>จังหวะ Take Profit</h3>
+              <ol id="resistanceList"></ol>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="notes-band">
+        <div>
+          <h2>หลักการที่ใช้</h2>
+          <p>MA50 ใช้ดูแรงกลางทาง, EMA200 ใช้ดูฐานระยะยาว, MACD ใช้ดู momentum, Fibonacci ใช้แบ่งโซนย่อ/เด้งจากรอบใหญ่ ระบบนี้เหมาะกับการศึกษาและวางแผน ไม่ใช่คำแนะนำการลงทุน</p>
+        </div>
+        <div class="mini-legend">
+          <span><i class="line price"></i>ราคา</span>
+          <span><i class="line ma"></i>MA50</span>
+          <span><i class="line ema"></i>EMA200</span>
+          <span><i class="line buy"></i>โซนสะสม</span>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
