@@ -792,21 +792,23 @@ $("searchForm").addEventListener("submit", (event) => {
 
 $("lookbackSelect").addEventListener("change", () => runAnalysis(state.symbol));
 $("riskSelect").addEventListener("change", () => runAnalysis(state.symbol));
-$("saveFinnhubKey").addEventListener("click", () => {
-  const currentValue = $("finnhubKeyInput").value;
-  const nextKey = currentValue.includes("•") ? state.finnhubKey : currentValue;
-  setFinnhubKey(nextKey);
-  runAnalysis(state.symbol);
-});
-$("finnhubKeyInput").addEventListener("focus", () => {
-  if ($("finnhubKeyInput").value.includes("•")) $("finnhubKeyInput").value = "";
-});
-$("finnhubKeyInput").addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    $("saveFinnhubKey").click();
-  }
-});
+if ($("saveFinnhubKey") && $("finnhubKeyInput")) {
+  $("saveFinnhubKey").addEventListener("click", () => {
+    const currentValue = $("finnhubKeyInput").value;
+    const nextKey = currentValue.includes("•") ? state.finnhubKey : currentValue;
+    setFinnhubKey(nextKey);
+    runAnalysis(state.symbol);
+  });
+  $("finnhubKeyInput").addEventListener("focus", () => {
+    if ($("finnhubKeyInput").value.includes("•")) $("finnhubKeyInput").value = "";
+  });
+  $("finnhubKeyInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      $("saveFinnhubKey").click();
+    }
+  });
+}
 window.addEventListener("resize", drawChart);
 
 state.finnhubKey = getFinnhubKey();
