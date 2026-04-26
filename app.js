@@ -1,5 +1,7 @@
 const $ = (id) => document.getElementById(id);
 
+const FINNHUB_API_KEY = "d7mvaa9r01qngrvpii50d7mvaa9r01qngrvpii5g";
+
 const state = {
   candles: [],
   analysis: null,
@@ -54,7 +56,7 @@ function normalizeSymbol(raw) {
 }
 
 function getFinnhubKey() {
-  return localStorage.getItem("daddyInvestorFinnhubKey") || "";
+  return FINNHUB_API_KEY || localStorage.getItem("daddyInvestorFinnhubKey") || "";
 }
 
 function setFinnhubKey(key) {
@@ -70,6 +72,7 @@ function setFinnhubKey(key) {
 
 function updateFinnhubKeyStatus() {
   const hasKey = Boolean(state.finnhubKey);
+  if (!$("finnhubKeyStatus") || !$("finnhubKeyInput")) return;
   $("finnhubKeyStatus").textContent = hasKey
     ? "ใช้ Finnhub เป็นแหล่งข้อมูลหลักแล้ว"
     : "ถ้าใส่ key ระบบจะใช้ Finnhub เป็นแหล่งข้อมูลหลัก";
