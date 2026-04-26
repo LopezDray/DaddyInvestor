@@ -259,6 +259,19 @@ function makeSampleData(symbol) {
   return candles;
 }
 
+function anchorCandlesToPrice(candles, targetPrice) {
+  const lastClose = candles.at(-1)?.close;
+  if (!Number.isFinite(lastClose) || !Number.isFinite(targetPrice) || targetPrice <= 0) return candles;
+  const multiplier = targetPrice / lastClose;
+  return candles.map((candle) => ({
+    ...candle,
+    open: candle.open * multiplier,
+    high: candle.high * multiplier,
+    low: candle.low * multiplier,
+    close: candle.close * multiplier,
+  }));
+}
+
 function sma(values, period) {
   return values.map((_, index) => {
     if (index + 1 < period) return null;
@@ -530,8 +543,8 @@ function updateSummary(symbol, analysis, isSample) {
 
   const scoreText = analysis.score >= 80 ? "โซนสะสมแข็งแรง" : analysis.score >= 60 ? "เริ่มน่าสนใจ" : analysis.score >= 40 ? "รอดูต่อ" : "ยังไม่เข้าเงื่อนไข";
   $("zoneReason").textContent = `${scoreText}: ราคาอยู่ห่าง EMA200 ${pct(analysis.emaDistance)} และเทรนด์คือ ${analysis.trendState}`;
-  $("statusPill").textContent = isSample ? "ใช้ข้อมูลตัวอย่าง" : analysis.quote ? "ราคาล่าสุด" : "ข้อมูลจริงรายวัน";
-  $("dataSource").textContent = isSample ? "Demo fallback data" : state.provider;
+  $("statusPill").textContent = isSample ? "กราฟตัวอย่าง" : analysis.quote ? "ราคาล่าสุด" : "ข้อมูลจริงรายวัน";
+  $("dataSource").textContent = state.provider;
   renderLists(analysis);
 }
 
@@ -737,14 +750,28 @@ async function runAnalysis(symbol = state.symbol) {
       try {
         candles = await fetchStooq(cleanSymbol);
       } catch (stooqError) {
+        try {
+          quote = await fetchFinnhubQuote(cleanSymbol);
+        } catch (fallbackQuoteError) {
+          try {
+            quote = await fetchYahooQuote(cleanSymbol);
+          } catch (yahooFallbackQuoteError) {
+            quote = null;
+          }
+        }
         candles = makeSampleData(cleanSymbol);
+        if (quote) {
+          candles = anchorCandlesToPrice(candles, quote.price);
+          state.provider = "Demo fallback data anchored to latest quote";
+        } else {
+          state.provider = "Demo fallback data";
+        }
         isSample = true;
-        state.provider = "Demo fallback data";
       }
     }
   }
 
-  if (!quote) {
+  if (!quote && !isSample) {
     try {
       quote = await fetchFinnhubQuote(cleanSymbol);
     } catch (quoteError) {
