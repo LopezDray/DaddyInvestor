@@ -26,6 +26,15 @@
             <p class="hint">รองรับหุ้น/ADR ที่จดทะเบียนในสหรัฐ เช่น หุ้นอเมริกา หุ้นจีน และบริษัทต่างประเทศที่เทรดใน NYSE/Nasdaq ระบบจะใช้ราคาปิดวันทำการล่าสุดเป็นหลัก</p>
           </form>
 
+          <div class="api-key-box">
+            <label for="finnhubKeyInput">Finnhub API Key</label>
+            <div class="symbol-row">
+              <input id="finnhubKeyInput" type="password" placeholder="ใส่ key ของคุณ">
+              <button id="saveFinnhubKey" type="button">บันทึก</button>
+            </div>
+            <p class="hint" id="finnhubKeyStatus">ถ้าใส่ key ระบบจะใช้ Finnhub เป็นแหล่งข้อมูลหลัก</p>
+          </div>
+
           <div class="setting-grid">
             <label>
               ช่วงข้อมูล

@@ -6,6 +6,7 @@ const state = {
   symbol: "AAPL",
   provider: "Stooq free daily data",
   quote: null,
+  finnhubKey: "",
 };
 
 const sampleSymbols = {
@@ -52,6 +53,29 @@ function normalizeSymbol(raw) {
   return raw.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, "");
 }
 
+function getFinnhubKey() {
+  return localStorage.getItem("daddyInvestorFinnhubKey") || "";
+}
+
+function setFinnhubKey(key) {
+  const cleanKey = key.trim();
+  if (cleanKey) {
+    localStorage.setItem("daddyInvestorFinnhubKey", cleanKey);
+  } else {
+    localStorage.removeItem("daddyInvestorFinnhubKey");
+  }
+  state.finnhubKey = cleanKey;
+  updateFinnhubKeyStatus();
+}
+
+function updateFinnhubKeyStatus() {
+  const hasKey = Boolean(state.finnhubKey);
+  $("finnhubKeyStatus").textContent = hasKey
+    ? "ใช้ Finnhub เป็นแหล่งข้อมูลหลักแล้ว"
+    : "ถ้าใส่ key ระบบจะใช้ Finnhub เป็นแหล่งข้อมูลหลัก";
+  $("finnhubKeyInput").value = hasKey ? "••••••••••••" : "";
+}
+
 function toStooqSymbol(symbol) {
   if (symbol.includes(".")) return symbol.toLowerCase();
   return `${symbol}.us`.toLowerCase();
@@ -95,6 +119,33 @@ async function fetchYahoo(symbol) {
   return candles;
 }
 
+async function fetchFinnhubCandles(symbol) {
+  const token = state.finnhubKey;
+  if (!token) throw new Error("ยังไม่มี Finnhub API key");
+
+  const to = Math.floor(Date.now() / 1000);
+  const from = to - 60 * 60 * 24 * 365 * 6;
+  const url = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${to}&token=${encodeURIComponent(token)}`;
+  const payload = await fetchJson(url, "Finnhub daily candles");
+  if (payload?.s !== "ok" || !Array.isArray(payload.t)) throw new Error("Finnhub ไม่มีข้อมูลกราฟ");
+
+  const candles = payload.t
+    .map((timestamp, index) => ({
+      date: new Date(timestamp * 1000).toISOString().slice(0, 10),
+      open: Number(payload.o?.[index]),
+      high: Number(payload.h?.[index]),
+      low: Number(payload.l?.[index]),
+      close: Number(payload.c?.[index]),
+      volume: Number(payload.v?.[index]),
+    }))
+    .filter((candle) => candle.date && Number.isFinite(candle.close) && candle.close > 0)
+    .filter((candle) => isCompletedMarketDate(candle.date));
+
+  if (candles.length < 240) throw new Error("ข้อมูล Finnhub ย้อนหลังไม่พอ");
+  state.provider = "Finnhub daily candles";
+  return candles;
+}
+
 async function fetchYahooQuote(symbol) {
   const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbol)}`;
   const payload = await fetchJson(url, "Yahoo Finance quote");
@@ -108,6 +159,24 @@ async function fetchYahooQuote(symbol) {
     time: quote?.regularMarketTime ? new Date(quote.regularMarketTime * 1000) : new Date(),
     marketState: quote?.marketState || "",
     source: "Yahoo Finance quote",
+  };
+}
+
+async function fetchFinnhubQuote(symbol) {
+  const token = state.finnhubKey;
+  if (!token) throw new Error("ยังไม่มี Finnhub API key");
+
+  const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(token)}`;
+  const payload = await fetchJson(url, "Finnhub quote");
+  const price = Number(payload?.c);
+  if (!Number.isFinite(price) || price <= 0) throw new Error("ไม่มีราคาล่าสุดจาก Finnhub");
+
+  return {
+    price,
+    previousClose: Number(payload?.pc),
+    time: payload?.t ? new Date(payload.t * 1000) : new Date(),
+    marketState: "FINNHUB",
+    source: "Finnhub quote",
   };
 }
 
@@ -667,19 +736,40 @@ async function runAnalysis(symbol = state.symbol) {
   let isSample = false;
   let quote = null;
   try {
-    candles = await fetchYahoo(cleanSymbol);
+    candles = await fetchFinnhubCandles(cleanSymbol);
     try {
-      quote = await fetchYahooQuote(cleanSymbol);
+      quote = await fetchFinnhubQuote(cleanSymbol);
     } catch (quoteError) {
       quote = null;
     }
-  } catch (yahooError) {
+  } catch (finnhubError) {
     try {
-      candles = await fetchStooq(cleanSymbol);
-    } catch (stooqError) {
-      candles = makeSampleData(cleanSymbol);
-      isSample = true;
-      state.provider = "Demo fallback data";
+      candles = await fetchYahoo(cleanSymbol);
+      try {
+        quote = await fetchYahooQuote(cleanSymbol);
+      } catch (quoteError) {
+        quote = null;
+      }
+    } catch (yahooError) {
+      try {
+        candles = await fetchStooq(cleanSymbol);
+      } catch (stooqError) {
+        candles = makeSampleData(cleanSymbol);
+        isSample = true;
+        state.provider = "Demo fallback data";
+      }
+    }
+  }
+
+  if (!quote) {
+    try {
+      quote = await fetchFinnhubQuote(cleanSymbol);
+    } catch (quoteError) {
+      try {
+        quote = await fetchYahooQuote(cleanSymbol);
+      } catch (yahooQuoteError) {
+        quote = null;
+      }
     }
   }
 
@@ -699,6 +789,23 @@ $("searchForm").addEventListener("submit", (event) => {
 
 $("lookbackSelect").addEventListener("change", () => runAnalysis(state.symbol));
 $("riskSelect").addEventListener("change", () => runAnalysis(state.symbol));
+$("saveFinnhubKey").addEventListener("click", () => {
+  const currentValue = $("finnhubKeyInput").value;
+  const nextKey = currentValue.includes("•") ? state.finnhubKey : currentValue;
+  setFinnhubKey(nextKey);
+  runAnalysis(state.symbol);
+});
+$("finnhubKeyInput").addEventListener("focus", () => {
+  if ($("finnhubKeyInput").value.includes("•")) $("finnhubKeyInput").value = "";
+});
+$("finnhubKeyInput").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    $("saveFinnhubKey").click();
+  }
+});
 window.addEventListener("resize", drawChart);
 
+state.finnhubKey = getFinnhubKey();
+updateFinnhubKeyStatus();
 runAnalysis("AAPL");
