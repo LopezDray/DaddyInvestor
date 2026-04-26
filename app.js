@@ -2,8 +2,11 @@ const $ = (id) => document.getElementById(id);
 
 const FINNHUB_API_KEY = "d7mvaa9r01qngrvpii50d7mvaa9r01qngrvpii5g";
 const FAST_MODE = true;
-const REQUEST_TIMEOUT_MS = 3000;
+const USE_CLASSIC_DEMO_CHART = false;
+const REQUEST_TIMEOUT_MS = 4000;
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
+const DATA_CACHE_VERSION = "real-candles-v2";
+const DISPLAY_SMOOTH_DAYS = 5;
 
 const state = {
   candles: [],
@@ -69,7 +72,7 @@ function toStooqSymbol(symbol) {
 }
 
 function cacheKey(symbol) {
-  return `daddyInvestorCandles:${symbol}`;
+  return `daddyInvestorCandles:${DATA_CACHE_VERSION}:${symbol}`;
 }
 
 function getCachedCandles(symbol) {
@@ -133,26 +136,38 @@ async function fetchFinnhubCandles(symbol) {
   if (!token) throw new Error("ยังไม่มี Finnhub API key");
 
   const to = Math.floor(Date.now() / 1000);
-  const from = to - 60 * 60 * 24 * 365 * 6;
-  const url = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${to}&token=${encodeURIComponent(token)}`;
-  const payload = await fetchJson(url, "Finnhub daily candles");
-  if (payload?.s !== "ok" || !Array.isArray(payload.t)) throw new Error("Finnhub ไม่มีข้อมูลกราฟ");
+  const yearSeconds = 60 * 60 * 24 * 365;
+  const windows = [5, 3, 1];
+  let lastError = null;
 
-  const candles = payload.t
-    .map((timestamp, index) => ({
-      date: new Date(timestamp * 1000).toISOString().slice(0, 10),
-      open: Number(payload.o?.[index]),
-      high: Number(payload.h?.[index]),
-      low: Number(payload.l?.[index]),
-      close: Number(payload.c?.[index]),
-      volume: Number(payload.v?.[index]),
-    }))
-    .filter((candle) => candle.date && Number.isFinite(candle.close) && candle.close > 0)
-    .filter((candle) => isCompletedMarketDate(candle.date));
+  for (const years of windows) {
+    try {
+      const from = to - yearSeconds * years;
+      const url = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${to}&token=${encodeURIComponent(token)}`;
+      const payload = await fetchJson(url, "Finnhub daily candles");
+      if (payload?.s !== "ok" || !Array.isArray(payload.t)) throw new Error(`Finnhub ไม่มีข้อมูลกราฟ ${years} ปี`);
 
-  if (candles.length < 240) throw new Error("ข้อมูล Finnhub ย้อนหลังไม่พอ");
-  state.provider = "Finnhub daily candles";
-  return candles;
+      const candles = payload.t
+        .map((timestamp, index) => ({
+          date: new Date(timestamp * 1000).toISOString().slice(0, 10),
+          open: Number(payload.o?.[index]),
+          high: Number(payload.h?.[index]),
+          low: Number(payload.l?.[index]),
+          close: Number(payload.c?.[index]),
+          volume: Number(payload.v?.[index]),
+        }))
+        .filter((candle) => candle.date && Number.isFinite(candle.close) && candle.close > 0)
+        .filter((candle) => isCompletedMarketDate(candle.date));
+
+      if (candles.length < 200) throw new Error(`ข้อมูล Finnhub ${years} ปีน้อยเกินไป`);
+      state.provider = `Finnhub daily candles ${years}Y`;
+      return candles;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("Finnhub ไม่มีข้อมูลกราฟ");
 }
 
 async function fetchYahooQuote(symbol) {
@@ -294,6 +309,35 @@ function makeSampleData(symbol) {
     });
   }
   return candles;
+}
+
+function makeFlatFallbackData(symbol, targetPrice) {
+  const price = Number.isFinite(targetPrice) && targetPrice > 0 ? targetPrice : (sampleSymbols[symbol]?.base || 100);
+  const today = new Date();
+  const candles = [];
+
+  for (let i = 420; i >= 0; i -= 1) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - i);
+    const day = date.getDay();
+    if (day === 0 || day === 6) continue;
+
+    const t = candles.length;
+    const slowWave = Math.sin(t / 34) * price * 0.025;
+    const microWave = Math.cos(t / 17) * price * 0.01;
+    const close = price + slowWave + microWave;
+    const spread = Math.max(price * 0.006, 0.25);
+    candles.push({
+      date: date.toISOString().slice(0, 10),
+      open: close - spread * 0.2,
+      high: close + spread,
+      low: close - spread,
+      close,
+      volume: 0,
+    });
+  }
+
+  return anchorCandlesToPrice(candles, price);
 }
 
 function anchorCandlesToPrice(candles, targetPrice) {
@@ -583,7 +627,11 @@ function updateSummary(symbol, analysis, isSample) {
   $("macdDetail").textContent = `คะแนนสะสม ${analysis.score}/100, MACD histogram ล่าสุด ${analysis.macdData.histogram.at(-1).toFixed(3)}`;
 
   const scoreText = analysis.score >= 80 ? "โซนสะสมแข็งแรง" : analysis.score >= 60 ? "เริ่มน่าสนใจ" : analysis.score >= 40 ? "รอดูต่อ" : "ยังไม่เข้าเงื่อนไข";
-  $("zoneReason").textContent = `${scoreText}: ราคาอยู่ห่าง EMA200 ${pct(analysis.emaDistance)} และเทรนด์คือ ${analysis.trendState}`;
+  if (isSample) {
+    $("zoneReason").textContent = `${scoreText}: กราฟตัวอย่างอิงราคาล่าสุด ใช้ดูภาพรวมเบื้องต้น`;
+  } else {
+    $("zoneReason").textContent = `${scoreText}: ราคาอยู่ห่าง EMA200 ${pct(analysis.emaDistance)} และเทรนด์คือ ${analysis.trendState}`;
+  }
   $("statusPill").textContent = isSample ? "กราฟตัวอย่าง" : analysis.quote ? "ราคาล่าสุด" : "ข้อมูลจริงรายวัน";
   $("dataSource").textContent = state.provider;
   renderLists(analysis);
@@ -646,7 +694,7 @@ function drawChart() {
   ctx.fillStyle = "rgba(22, 113, 95, 0.12)";
   ctx.fillRect(pad.left, y(a.zoneTop), plotW, Math.max(4, y(a.zoneBottom) - y(a.zoneTop)));
 
-  drawLine(ctx, a.scoped.map((c) => c.close), x, y, "#2f68a3", 2.4);
+  drawSmoothLine(ctx, smoothDisplaySeries(a.scoped.map((c) => c.close), DISPLAY_SMOOTH_DAYS), x, y, "#2f68a3", 2.4);
   drawLine(ctx, a.ma50Series, x, y, "#b78426", 1.8);
   drawLine(ctx, a.ema200Series, x, y, "#16715f", 1.8);
 
@@ -767,6 +815,49 @@ function drawLine(ctx, series, x, y, color, lineWidth) {
   ctx.stroke();
 }
 
+function drawSmoothLine(ctx, series, x, y, color, lineWidth) {
+  const points = series
+    .map((value, index) => Number.isFinite(value) ? { x: x(index), y: y(value) } : null)
+    .filter(Boolean);
+
+  if (points.length < 2) return;
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const current = points[index];
+    const next = points[index + 1];
+    const midX = (current.x + next.x) / 2;
+    const midY = (current.y + next.y) / 2;
+    ctx.quadraticCurveTo(current.x, current.y, midX, midY);
+  }
+
+  const last = points.at(-1);
+  ctx.lineTo(last.x, last.y);
+  ctx.stroke();
+}
+
+function smoothDisplaySeries(series, period) {
+  if (period <= 1) return series;
+  const output = [];
+  for (let index = 0; index < series.length; index += 1) {
+    if (!Number.isFinite(series[index])) {
+      output.push(null);
+      continue;
+    }
+    const start = Math.max(0, index - period + 1);
+    const slice = series.slice(start, index + 1).filter(Number.isFinite);
+    output.push(slice.reduce((sum, value) => sum + value, 0) / slice.length);
+  }
+  if (Number.isFinite(series.at(-1))) output[output.length - 1] = series.at(-1);
+  return output;
+}
+
 async function runAnalysis(symbol = state.symbol) {
   const cleanSymbol = normalizeSymbol(symbol) || "AAPL";
   state.symbol = cleanSymbol;
@@ -778,7 +869,14 @@ async function runAnalysis(symbol = state.symbol) {
 
   const quotePromise = fetchFinnhubQuote(cleanSymbol).catch(() => fetchYahooQuote(cleanSymbol)).catch(() => null);
 
-  if (!candles) {
+  if (USE_CLASSIC_DEMO_CHART) {
+    quote = await quotePromise;
+    candles = makeSampleData(cleanSymbol);
+    if (quote) candles = anchorCandlesToPrice(candles, quote.price);
+    isSample = true;
+    state.provider = quote ? "Classic demo chart anchored to latest quote" : "Classic demo chart";
+  } else if (!candles) {
+
     const candleResult = await fetchFinnhubCandles(cleanSymbol)
       .then((data) => ({ ok: true, data }))
       .catch((error) => ({ ok: false, error }));
@@ -787,13 +885,15 @@ async function runAnalysis(symbol = state.symbol) {
     if (candleResult.ok) {
       candles = candleResult.data;
       setCachedCandles(cleanSymbol, candles);
+      state.provider = quote ? "Finnhub candles + quote" : "Finnhub daily candles";
     } else {
       try {
-        if (FAST_MODE) throw candleResult.error;
         candles = await fetchYahoo(cleanSymbol);
         setCachedCandles(cleanSymbol, candles);
+        state.provider = quote ? "Yahoo chart + Finnhub quote" : "Yahoo Finance daily chart";
       } catch (yahooError) {
         try {
+          if (FAST_MODE) throw yahooError;
           candles = await fetchStooq(cleanSymbol);
           setCachedCandles(cleanSymbol, candles);
         } catch (stooqError) {
@@ -809,12 +909,12 @@ async function runAnalysis(symbol = state.symbol) {
         }
       }
     }
-  } else {
+  } else if (!USE_CLASSIC_DEMO_CHART) {
     quote = await quotePromise;
     state.provider = "Cached daily candles";
   }
 
-  if (!quote && !isSample) {
+  if (!quote && !isSample && !USE_CLASSIC_DEMO_CHART) {
     try {
       quote = await fetchFinnhubQuote(cleanSymbol);
     } catch (quoteError) {
