@@ -7,8 +7,8 @@ const PREFER_YAHOO_CHART = true;
 const QUOTE_TIMEOUT_MS = 3000;
 const CHART_TIMEOUT_MS = 4500;
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
-const DATA_CACHE_VERSION = "yahoo-first-v2";
-const DISPLAY_SMOOTH_DAYS = 5;
+const DATA_CACHE_VERSION = "yahoo-real-v5";
+const DISPLAY_SMOOTH_DAYS = 1;
 
 const state = {
   candles: [],
@@ -261,6 +261,10 @@ async function fetchFinnhubQuote(symbol) {
 }
 
 async function fetchJson(url, providerName) {
+  if (isYahooChartProvider(providerName)) {
+    return fetchYahooChartJson(url, providerName);
+  }
+
   try {
     const response = await fetchWithTimeout(url, { cache: "no-store" }, timeoutForProvider(providerName));
     if (!response.ok) throw new Error("direct request failed");
@@ -271,6 +275,28 @@ async function fetchJson(url, providerName) {
     const text = await fetchViaProxy(url, `${providerName} via free CORS proxy`);
     return JSON.parse(text);
   }
+}
+
+function isYahooChartProvider(providerName) {
+  return providerName.toLowerCase().includes("yahoo chart");
+}
+
+async function fetchYahooChartJson(url, providerName) {
+  const direct = fetchDirectJson(url, providerName);
+  const proxy = fetchProxyJson(url, `${providerName} via proxy`);
+  return Promise.any([direct, proxy]);
+}
+
+async function fetchDirectJson(url, providerName) {
+  const response = await fetchWithTimeout(url, { cache: "no-store" }, timeoutForProvider(providerName));
+  if (!response.ok) throw new Error("direct request failed");
+  state.provider = providerName;
+  return response.json();
+}
+
+async function fetchProxyJson(url, providerName) {
+  const text = await fetchViaProxy(url, providerName);
+  return JSON.parse(text);
 }
 
 function timeoutForProvider(providerName) {
