@@ -22,7 +22,7 @@ if ($dbText -notmatch "window\.DADDY_ASSET_DB\s*=\s*(?<json>\{[\s\S]*\});?\s*$")
 }
 
 $db = $Matches.json | ConvertFrom-Json
-$assetCount = $db.assets.PSObject.Properties.Count
+$assetCount = @($db.assets.PSObject.Properties | Where-Object { $_.MemberType -eq "NoteProperty" }).Count
 if ($assetCount -lt 1000) {
   throw "Local DB has only $assetCount assets. Expected a broad S&P 500 + Russell 2000 build."
 }
