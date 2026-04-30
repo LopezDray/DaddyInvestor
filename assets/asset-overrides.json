@@ -1,0 +1,74 @@
+{
+  "ORA": {
+    "name": "Ormat Technologies",
+    "sectorCode": "UTIL",
+    "industryCode": "GEOTHERMAL",
+    "sleeve": "growth",
+    "risk": 50,
+    "reason": "Geothermal and renewable power infrastructure behaves more like infrastructure growth than a regulated utility."
+  },
+  "GEV": {
+    "name": "GE Vernova",
+    "sectorCode": "IND",
+    "industryCode": "POWER_GRID",
+    "sleeve": "growth",
+    "risk": 68,
+    "reason": "Power grid, electrification, and energy equipment growth exposure."
+  },
+  "PG": {
+    "name": "Procter & Gamble",
+    "sectorCode": "STAP",
+    "industryCode": "HOUSEHOLD",
+    "sleeve": "hedge",
+    "risk": 36,
+    "reason": "Consumer staples and household products are defensive equity exposure."
+  },
+  "WM": {
+    "name": "WM",
+    "sectorCode": "IND",
+    "industryCode": "WASTE",
+    "sleeve": "hedge",
+    "risk": 40,
+    "reason": "Waste management is an essential service with defensive characteristics."
+  },
+  "MCD": {
+    "name": "McDonald's",
+    "sectorCode": "DISC",
+    "industryCode": "RESTAURANTS",
+    "sleeve": "hedge",
+    "risk": 36,
+    "reason": "Large franchise restaurant business is more defensive than typical discretionary exposure."
+  },
+  "ESLT": {
+    "name": "Elbit Systems",
+    "sectorCode": "IND",
+    "industryCode": "AERO_DEF",
+    "sleeve": "hedge",
+    "risk": 64,
+    "reason": "Defense technology is mainly geopolitical defense exposure."
+  },
+  "KTOS": {
+    "name": "Kratos Defense & Security Solutions",
+    "sectorCode": "IND",
+    "industryCode": "AERO_DEF",
+    "sleeve": "hedge",
+    "risk": 78,
+    "reason": "Defense technology, unmanned systems, and tactical systems are geopolitical defense exposure, but with higher small/mid-cap volatility."
+  },
+  "AVAV": {
+    "name": "AeroVironment",
+    "sectorCode": "IND",
+    "industryCode": "AERO_DEF",
+    "sleeve": "hedge",
+    "risk": 80,
+    "reason": "Drone and unmanned systems exposure is defense-driven, but revenue concentration and valuation make it high volatility."
+  },
+  "HOOD": {
+    "name": "Robinhood Markets",
+    "sectorCode": "FIN",
+    "industryCode": "FINTECH",
+    "sleeve": "growth",
+    "risk": 82,
+    "reason": "Fintech, brokerage, and crypto-linked transaction growth behave more like high-beta growth than defensive financial exposure."
+  }
+}
