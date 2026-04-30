@@ -238,6 +238,37 @@ function Normalize-Symbol($Symbol) {
   ([string]$Symbol).Trim().ToUpperInvariant().Replace("-", ".") -replace "[^A-Z0-9.]", ""
 }
 
+function Test-IsUsExchange($Exchange) {
+  $text = ([string]$Exchange).Trim().ToUpperInvariant()
+  if (-not $text) { return $false }
+  foreach ($marker in @(
+    "NASDAQ",
+    "NYSE",
+    "NEW YORK STOCK EXCHANGE",
+    "AMEX",
+    "AMERICAN STOCK EXCHANGE",
+    "NYSE AMERICAN",
+    "NYSE ARCA",
+    "BATS",
+    "CBOE",
+    "IEX"
+  )) {
+    if ($text.Contains($marker)) { return $true }
+  }
+  $false
+}
+
+function Test-IsUsListedProfile($Profile, $IsIndexMember) {
+  if ($IsIndexMember) { return $true }
+  $country = ([string](First-Value @($Profile.country, $Profile.countryName))).Trim().ToUpperInvariant()
+  if ($country -and @("US", "USA", "UNITED STATES", "UNITED STATES OF AMERICA") -notcontains $country) {
+    return $false
+  }
+  $exchange = First-Value @($Profile.exchangeShortName, $Profile.exchange, $Profile.exchangeName)
+  if (Test-IsUsExchange $exchange) { return $true }
+  $country -in @("US", "USA", "UNITED STATES", "UNITED STATES OF AMERICA")
+}
+
 function Test-Truthy($Value) {
   if ($null -eq $Value) { return $false }
   if ($Value -is [bool]) { return $Value }
@@ -340,12 +371,11 @@ for ($part = 0; $part -lt $BulkParts; $part++) {
   $profiles = Get-ProfileBatch $part
   if (-not $profiles -or @($profiles).Count -eq 0) { break }
   foreach ($profile in @($profiles)) {
-    $exchange = ([string](First-Value @($profile.exchangeShortName, $profile.exchange))).ToUpperInvariant()
-    if (@("NASDAQ", "NYSE", "AMEX") -notcontains $exchange) { continue }
     $symbol = Normalize-Symbol $profile.symbol
     if (-not $symbol) { continue }
     $indexes = if ($IndexMembership.ContainsKey($symbol)) { $IndexMembership[$symbol] } else { @() }
     $isIndexMember = @($indexes).Count -gt 0
+    if (-not (Test-IsUsListedProfile $profile $isIndexMember)) { continue }
     $marketCap = Get-Number @($profile.mktCap, $profile.marketCap, 0) 0
     if (-not $isIndexMember -and -not (Test-IsEtf $profile) -and $marketCap -lt $MinMarketCap) { continue }
     $mapped = Map-Profile $profile
