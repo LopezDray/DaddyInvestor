@@ -319,11 +319,21 @@ function Map-Profile($Profile) {
 }
 
 function Compact-AssetRow($Mapped, $Indexes) {
-  $row = New-Object System.Collections.Generic.List[object]
-  $row.Add($Mapped.name); $row.Add($Mapped.sectorCode); $row.Add($Mapped.industryCode); $row.Add($Mapped.sleeve); $row.Add([int]$Mapped.risk)
-  if ($Mapped.assetType -or $Indexes.Count) { $row.Add($(if ($Mapped.assetType) { $Mapped.assetType } else { "Stock" })) }
-  if ($Indexes.Count) { $row.Add(@($Indexes)) }
-  @($row)
+  $indexList = @($Indexes | ForEach-Object { [string]$_ })
+  $row = @(
+    [string]$Mapped.name
+    [string]$Mapped.sectorCode
+    [string]$Mapped.industryCode
+    [string]$Mapped.sleeve
+    [int]$Mapped.risk
+  )
+  if ($Mapped.assetType -or $indexList.Count) {
+    $row += $(if ($Mapped.assetType) { [string]$Mapped.assetType } else { "Stock" })
+  }
+  if ($indexList.Count) {
+    $row += ,$indexList
+  }
+  return ,$row
 }
 
 for ($part = 0; $part -lt $BulkParts; $part++) {
