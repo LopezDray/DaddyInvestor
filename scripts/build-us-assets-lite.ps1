@@ -115,6 +115,30 @@ function Invoke-Fmp($Path, $Params) {
   Invoke-RestMethod -Method Get -Uri $uri -Headers @{ "User-Agent" = "DaddyInvestor/1.0" }
 }
 
+function Invoke-FmpLegacy($Path, $Params) {
+  $query = ($Params.GetEnumerator() | ForEach-Object {
+    "$([uri]::EscapeDataString($_.Key))=$([uri]::EscapeDataString([string]$_.Value))"
+  }) -join "&"
+  if ($query) { $query = "$query&" }
+  $uri = "https://financialmodelingprep.com/api/v4/$Path`?$query" + "apikey=$([uri]::EscapeDataString($env:FMP_API_KEY))"
+  Invoke-WebRequest -Method Get -Uri $uri -Headers @{ "User-Agent" = "DaddyInvestor/1.0" } -UseBasicParsing
+}
+
+function Get-LegacyAllProfiles {
+  Write-Host "profile-bulk part endpoint unavailable. Falling back to api/v4/profile/all."
+  $response = Invoke-FmpLegacy "profile/all" @{}
+  $content = ([string]$response.Content).Trim()
+  if (-not $content) { return @() }
+  if ($content.StartsWith("[")) { return @($content | ConvertFrom-Json) }
+  if ($content.StartsWith("{")) {
+    $parsed = $content | ConvertFrom-Json
+    if ($parsed.PSObject.Properties.Name -contains "Error Message") { throw $parsed."Error Message" }
+    if ($parsed.PSObject.Properties.Name -contains "message") { throw $parsed.message }
+    return @($parsed)
+  }
+  @([regex]::Split($content, "\r?\n") | ConvertFrom-Csv)
+}
+
 function Resolve-LocalSourceFile($Names) {
   foreach ($name in $Names) {
     foreach ($ext in @(".json", ".csv")) {
@@ -201,7 +225,16 @@ function Get-ProfileBatch($Part) {
     }
     return @($script:OfflineProfiles)
   }
-  Invoke-Fmp "profile-bulk" @{ part = $Part }
+  try {
+    Invoke-Fmp "profile-bulk" @{ part = $Part }
+  } catch {
+    $message = $_.Exception.Message
+    if ($message -match "part" -or $message -match "profile-bulk") {
+      if ($Part -eq 0) { return @(Get-LegacyAllProfiles) }
+      return @()
+    }
+    throw
+  }
 }
 
 function Normalize-Symbol($Symbol) {
