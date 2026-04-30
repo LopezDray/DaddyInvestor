@@ -228,12 +228,9 @@ function Get-ProfileBatch($Part) {
   try {
     Invoke-Fmp "profile-bulk" @{ part = $Part }
   } catch {
-    $message = $_.Exception.Message
-    if ($message -match "part" -or $message -match "profile-bulk") {
-      if ($Part -eq 0) { return @(Get-LegacyAllProfiles) }
-      return @()
-    }
-    throw
+    Write-Host "profile-bulk part $Part failed. Using fallback source."
+    if ($Part -eq 0) { return @(Get-LegacyAllProfiles) }
+    return @()
   }
 }
 
