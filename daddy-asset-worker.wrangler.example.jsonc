@@ -1,0 +1,6 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "daddy-asset-api",
+  "main": "daddy-asset-worker.js",
+  "compatibility_date": "2026-04-29"
+}

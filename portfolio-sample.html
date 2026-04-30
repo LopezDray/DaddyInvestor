@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ตรวจสุขภาพพอร์ต | คุณพ่อนักลงทุน</title>
+    <link rel="stylesheet" href="portfolio-sample.css?v=20260429-brand">
+  </head>
+  <body>
+    <main class="planner-shell">
+      <header class="top-bar">
+        <div class="brand-mark">
+          <img src="./assets/logo.png" alt="คุณพ่อนักลงทุน logo" onerror="this.onerror=null; this.src='./logo.png';">
+          <div>
+            <p class="eyebrow">คุณพ่อนักลงทุน</p>
+            <h1>ตรวจสุขภาพพอร์ต</h1>
+          </div>
+        </div>
+        <a class="ghost-link" href="./index.html">จังหวะลงทุน</a>
+      </header>
+
+      <section class="planner-grid">
+        <aside class="input-panel" aria-label="กรอกพอร์ต">
+          <div class="panel-heading">
+            <p class="eyebrow">Portfolio input</p>
+            <h2>พอร์ตปัจจุบัน</h2>
+          </div>
+
+          <div class="entry-grid">
+            <label class="field-block" for="symbolInput">
+              ชื่อหุ้น/สินทรัพย์
+              <input id="symbolInput" autocomplete="off" placeholder="เช่น PLTR, IAU, SGOV">
+              <span id="assetLookupHint" class="lookup-hint">พิมพ์ ticker เพื่อดู sector และกลุ่มอัตโนมัติ</span>
+            </label>
+
+            <label class="field-block" for="amountInput">
+              มูลค่าสินทรัพย์ USD
+              <input id="amountInput" inputmode="decimal" placeholder="เช่น 8000">
+              <span class="lookup-hint field-spacer" aria-hidden="true"></span>
+            </label>
+          </div>
+
+          <div class="button-row">
+            <button id="addAssetButton" type="button">เพิ่มรายการ</button>
+            <button id="loadSampleButton" class="secondary-button" type="button">พอร์ตตัวอย่าง</button>
+          </div>
+
+          <div class="asset-entry-panel">
+            <div class="section-head compact">
+              <div>
+                <p class="eyebrow">Current assets</p>
+                <h3>รายการที่กรอก</h3>
+              </div>
+              <button id="clearAssetsButton" class="small-button" type="button">ล้าง</button>
+            </div>
+            <div class="entry-table-wrap">
+              <table class="entry-table">
+                <thead>
+                  <tr>
+                    <th>สินทรัพย์</th>
+                    <th>กลุ่ม / Sector</th>
+                    <th>มูลค่า USD</th>
+                    <th>สัดส่วน</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="entryTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </aside>
+
+        <section class="output-panel" aria-label="ผลวิเคราะห์พอร์ต">
+          <div class="score-strip">
+            <article>
+              <span>ระดับความเสี่ยง</span>
+              <strong id="riskLabel">-</strong>
+              <small id="riskScore">-</small>
+            </article>
+            <article>
+              <span>ความเข้ากับแผน</span>
+              <strong id="fitLabel">-</strong>
+              <small id="fitScore">-</small>
+            </article>
+            <article>
+              <span>มูลค่ารวม USD</span>
+              <strong id="totalUsdValue">-</strong>
+              <small id="totalStatus">ฐานคำนวณเป็น USD</small>
+            </article>
+          </div>
+
+          <div class="current-panel">
+            <div class="section-head compact">
+              <div>
+                <p class="eyebrow">Current mix</p>
+                <h2>สัดส่วนปัจจุบันจากมูลค่า USD</h2>
+              </div>
+            </div>
+            <div class="mix-chart-layout">
+              <div class="mix-pie" id="currentMixPie" aria-label="กราฟสัดส่วนปัจจุบัน"></div>
+              <div class="current-mix-list" id="currentMixList"></div>
+            </div>
+          </div>
+
+          <div class="scenario-panel">
+            <div class="section-head compact">
+              <div>
+                <p class="eyebrow">Stress map</p>
+                <h2>พอร์ตนี้รับมืออะไรได้บ้าง</h2>
+              </div>
+            </div>
+            <div class="scenario-grid" id="scenarioGrid"></div>
+          </div>
+
+          <div class="view-panel">
+            <div class="section-head compact">
+              <div>
+                <p class="eyebrow">Portfolio view</p>
+                <h2>มุมมองต่อพอร์ตปัจจุบัน</h2>
+              </div>
+            </div>
+            <p id="portfolioView">-</p>
+          </div>
+
+          <div class="target-choice-panel">
+            <div class="section-head compact">
+              <div>
+                <p class="eyebrow">Target profile</p>
+                <h2>เลือกเป้าหมายรับมือทุกสภาวะ</h2>
+              </div>
+            </div>
+            <div class="profile-tabs" role="radiogroup" aria-label="เลือกระดับความเสี่ยง">
+              <button class="profile-tab" type="button" data-profile="low" aria-pressed="false">เสี่ยงต่ำ</button>
+              <button class="profile-tab is-active" type="button" data-profile="balanced" aria-pressed="true">เสี่ยงกลาง</button>
+              <button class="profile-tab" type="button" data-profile="high" aria-pressed="false">เสี่ยงสูง</button>
+            </div>
+          </div>
+
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Allocation</p>
+              <h2>เทียบพอร์ตเป้าหมาย</h2>
+            </div>
+            <span id="profileName" class="profile-chip">เสี่ยงกลาง</span>
+          </div>
+
+          <div class="allocation-list" id="allocationList"></div>
+
+          <div class="rebalance-panel">
+            <div class="section-head compact">
+              <div>
+                <p class="eyebrow">Rebalance plan</p>
+                <h2>ควรเพิ่ม/ลดอะไร</h2>
+              </div>
+            </div>
+            <div class="rebalance-list" id="rebalanceList"></div>
+          </div>
+
+          <div class="recommendation-panel">
+            <div class="section-head compact">
+              <div>
+                <p class="eyebrow">Action points</p>
+                <h2>จุดที่ควรดู</h2>
+              </div>
+            </div>
+            <ul id="recommendationList"></ul>
+          </div>
+        </section>
+      </section>
+
+      <section class="source-band">
+        <p>ไม่ใช่คำแนะนำการลงทุนซื้อขายเฉพาะบุคคล</p>
+        <p>ศึกษาก่อนลงทุนเสมอ</p>
+      </section>
+    </main>
+
+    <script src="assets/api-config.js"></script>
+    <script src="assets/us-assets-lite.js"></script>
+    <script src="portfolio-sample.js"></script>
+  </body>
+</html>
