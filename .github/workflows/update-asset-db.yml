@@ -1,0 +1,44 @@
+name: Update asset DB
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 20 * * 0"
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build S&P 500 and Russell 2000 local DB
+        shell: pwsh
+        env:
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+        run: |
+          if (-not $env:FMP_API_KEY) {
+            throw "Missing repository secret FMP_API_KEY"
+          }
+          powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-us-assets-lite.ps1 -BulkParts 100 -MinMarketCap 0
+
+      - name: Validate coverage
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\validate-asset-db.ps1 -MinCoveragePct 95
+
+      - name: Commit updated DB
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/us-assets-lite.js assets/asset-review-queue.json assets/index-coverage-report.json
+          if (git diff --cached --quiet) {
+            Write-Host "No asset DB changes."
+          } else {
+            git commit -m "Update local asset DB"
+            git push
+          }
