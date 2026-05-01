@@ -20,24 +20,25 @@ const state = {
 };
 
 const SYMBOL_ALIASES = {
-  XAUUSD: { dataSymbol: "XAUUSD=X", displaySymbol: "XAUUSD", label: "ทองโลก USD", prefix: "$", suffix: "", yahooOnly: true },
-  "XAUUSD=X": { dataSymbol: "XAUUSD=X", displaySymbol: "XAUUSD", label: "ทองโลก USD", prefix: "$", suffix: "", yahooOnly: true },
-  GOLD: { dataSymbol: "XAUUSD=X", displaySymbol: "XAUUSD", label: "ทองโลก USD", prefix: "$", suffix: "", yahooOnly: true },
+  XAUUSD: { dataSymbol: "XAUUSD=X", dataSymbols: ["XAUUSD=X"], fallbackDataSymbols: ["GC=F"], finnhub: { endpoint: "forex/candle", symbol: "OANDA:XAU_USD", label: "Finnhub forex XAU/USD" }, displaySymbol: "XAUUSD", label: "ทองโลก USD", prefix: "$", suffix: "", yahooOnly: true },
+  "XAUUSD=X": { dataSymbol: "XAUUSD=X", dataSymbols: ["XAUUSD=X"], fallbackDataSymbols: ["GC=F"], finnhub: { endpoint: "forex/candle", symbol: "OANDA:XAU_USD", label: "Finnhub forex XAU/USD" }, displaySymbol: "XAUUSD", label: "ทองโลก USD", prefix: "$", suffix: "", yahooOnly: true },
+  GOLD: { dataSymbol: "XAUUSD=X", dataSymbols: ["XAUUSD=X"], fallbackDataSymbols: ["GC=F"], finnhub: { endpoint: "forex/candle", symbol: "OANDA:XAU_USD", label: "Finnhub forex XAU/USD" }, displaySymbol: "XAUUSD", label: "ทองโลก USD", prefix: "$", suffix: "", yahooOnly: true },
   BTC: { dataSymbol: "BTC-USD", displaySymbol: "BTC", label: "Bitcoin USD", prefix: "$", suffix: "", yahooOnly: true },
   BTCUSD: { dataSymbol: "BTC-USD", displaySymbol: "BTC", label: "Bitcoin USD", prefix: "$", suffix: "", yahooOnly: true },
   "BTC-USD": { dataSymbol: "BTC-USD", displaySymbol: "BTC", label: "Bitcoin USD", prefix: "$", suffix: "", yahooOnly: true },
   ETH: { dataSymbol: "ETH-USD", displaySymbol: "ETH", label: "Ethereum USD", prefix: "$", suffix: "", yahooOnly: true },
   ETHUSD: { dataSymbol: "ETH-USD", displaySymbol: "ETH", label: "Ethereum USD", prefix: "$", suffix: "", yahooOnly: true },
   "ETH-USD": { dataSymbol: "ETH-USD", displaySymbol: "ETH", label: "Ethereum USD", prefix: "$", suffix: "", yahooOnly: true },
-  SET: { dataSymbol: "SET.BK", displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
-  SETINDEX: { dataSymbol: "SET.BK", displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
-  "SET.BK": { dataSymbol: "SET.BK", displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
-  "^SET.BK": { dataSymbol: "SET.BK", displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
+  SET: { dataSymbol: "^SET.BK", dataSymbols: ["^SET.BK", "SET.BK"], displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
+  SETINDEX: { dataSymbol: "^SET.BK", dataSymbols: ["^SET.BK", "SET.BK"], displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
+  "SET.BK": { dataSymbol: "^SET.BK", dataSymbols: ["^SET.BK", "SET.BK"], displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
+  "^SET.BK": { dataSymbol: "^SET.BK", dataSymbols: ["^SET.BK", "SET.BK"], displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
 };
 
 function instrumentDefaults(symbol) {
   return {
     dataSymbol: symbol,
+    dataSymbols: [symbol],
     displaySymbol: symbol,
     label: "สินทรัพย์จดทะเบียนสหรัฐ",
     prefix: "$",
@@ -50,7 +51,10 @@ function resolveInstrument(raw) {
   const clean = normalizeSymbol(raw) || "AAPL";
   const compact = clean.replace(/[./]/g, "");
   const alias = SYMBOL_ALIASES[clean] || SYMBOL_ALIASES[compact];
-  return alias ? { ...alias } : instrumentDefaults(clean);
+  const instrument = alias ? { ...alias } : instrumentDefaults(clean);
+  if (!instrument.dataSymbols) instrument.dataSymbols = [instrument.dataSymbol];
+  if (!instrument.fallbackDataSymbols) instrument.fallbackDataSymbols = [];
+  return instrument;
 }
 
 function money(value, symbol = state.symbol) {
@@ -147,8 +151,8 @@ function setCachedCandles(symbol, candles) {
   }
 }
 
-async function fetchStooq(symbol) {
-  const stooqSymbol = toStooqSymbol(symbol);
+async function fetchStooq(symbol, stooqSymbolOverride = null) {
+  const stooqSymbol = stooqSymbolOverride || toStooqSymbol(symbol);
   if (!stooqSymbol) throw new Error("Stooq ไม่มีชุดข้อมูลสำหรับสินทรัพย์นี้");
   const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(stooqSymbol)}&i=d`;
   const csv = await fetchText(url);
@@ -280,6 +284,33 @@ async function fetchFinnhubCandles(symbol) {
   }
 
   throw lastError || new Error("Finnhub ไม่มีข้อมูลกราฟ");
+}
+
+async function fetchFinnhubMarketCandles(config) {
+  const token = state.finnhubKey;
+  if (!token) throw new Error("ยังไม่มี Finnhub API key");
+
+  const to = Math.floor(Date.now() / 1000);
+  const from = to - 60 * 60 * 24 * 365 * 5;
+  const url = `https://finnhub.io/api/v1/${config.endpoint}?symbol=${encodeURIComponent(config.symbol)}&resolution=D&from=${from}&to=${to}&token=${encodeURIComponent(token)}`;
+  const payload = await fetchJson(url, config.label || "Finnhub market candles");
+  if (payload?.s !== "ok" || !Array.isArray(payload.t)) throw new Error("Finnhub ไม่มีข้อมูลกราฟสำหรับสินทรัพย์นี้");
+
+  const candles = payload.t
+    .map((timestamp, index) => ({
+      date: new Date(timestamp * 1000).toISOString().slice(0, 10),
+      open: Number(payload.o?.[index]),
+      high: Number(payload.h?.[index]),
+      low: Number(payload.l?.[index]),
+      close: Number(payload.c?.[index]),
+      volume: Number(payload.v?.[index] || 0),
+    }))
+    .filter((candle) => candle.date && Number.isFinite(candle.close) && candle.close > 0)
+    .filter((candle) => isCompletedMarketDate(candle.date));
+
+  if (candles.length < 180) throw new Error("ข้อมูล Finnhub ย้อนหลังไม่พอ");
+  state.provider = config.label || "Finnhub market candles";
+  return candles;
 }
 
 async function fetchJson(url, providerName) {
@@ -904,14 +935,40 @@ function smoothDisplaySeries(series, period) {
 
 async function loadRealCandles(symbol, instrument = state.instrument) {
   const errors = [];
+  const yahooSymbols = instrument?.dataSymbols?.length ? instrument.dataSymbols : [symbol];
 
-  try {
-    const candles = await fetchYahoo(symbol);
-    setCachedCandles(symbol, candles);
-    state.provider = "Yahoo daily close";
-    return candles;
-  } catch (error) {
-    errors.push(`Yahoo: ${error.message}`);
+  for (const yahooSymbol of yahooSymbols) {
+    try {
+      const candles = await fetchYahoo(yahooSymbol);
+      setCachedCandles(symbol, candles);
+      if (yahooSymbol !== symbol) setCachedCandles(yahooSymbol, candles);
+      state.provider = yahooSymbol === symbol ? "Yahoo daily close" : `Yahoo daily close (${yahooSymbol})`;
+      return candles;
+    } catch (error) {
+      errors.push(`Yahoo ${yahooSymbol}: ${error.message}`);
+    }
+  }
+
+  if (instrument?.finnhub) {
+    try {
+      const candles = await fetchFinnhubMarketCandles(instrument.finnhub);
+      setCachedCandles(symbol, candles);
+      return candles;
+    } catch (error) {
+      errors.push(`${instrument.finnhub.label || "Finnhub"}: ${error.message}`);
+    }
+  }
+
+  for (const yahooSymbol of instrument?.fallbackDataSymbols || []) {
+    try {
+      const candles = await fetchYahoo(yahooSymbol);
+      setCachedCandles(symbol, candles);
+      setCachedCandles(yahooSymbol, candles);
+      state.provider = `Yahoo fallback daily close (${yahooSymbol})`;
+      return candles;
+    } catch (error) {
+      errors.push(`Yahoo fallback ${yahooSymbol}: ${error.message}`);
+    }
   }
 
   if (instrument?.yahooOnly) {
