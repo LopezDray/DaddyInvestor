@@ -182,10 +182,36 @@ function Get-ScreenerProfiles {
     foreach ($row in @($rows)) {
       $symbol = Get-ProfileSymbol $row
       if (-not (Test-ValidSymbol $symbol) -or $seen.ContainsKey($symbol)) { continue }
-      Add-Member -InputObject $row -NotePropertyName "_screenerExchange" -NotePropertyValue $exchange -Force
+      $companyName = First-Value @($row.companyName, $row.company, $row.name, $symbol)
+      $sectorText = First-Value @($row.sector, $row.sectorName)
+      $industryText = First-Value @($row.industry, $row.industryName)
+      $marketCap = First-Value @($row.marketCap, $row.mktCap, 0)
+      $assetType = First-Value @($row.assetType, $row.type)
+      $isEtf = First-Value @($row.isEtf, $row.isETF, $row.etf)
+      $normalized = [pscustomobject]@{
+        symbol = $symbol
+        ticker = $symbol
+        companyName = $companyName
+        company = $companyName
+        name = $companyName
+        sector = $sectorText
+        sectorName = $sectorText
+        industry = $industryText
+        industryName = $industryText
+        exchangeShortName = $exchange
+        exchange = $exchange
+        exchangeName = $exchange
+        country = "US"
+        marketCap = $marketCap
+        mktCap = $marketCap
+        beta = First-Value @($row.beta, 1)
+        isEtf = $isEtf
+        assetType = $assetType
+        _screenerExchange = $exchange
+      }
       $seen[$symbol] = $true
       $accepted++
-      $profiles.Add($row)
+      $profiles.Add($normalized)
     }
     Write-Host "Accepted $accepted unique profiles from $exchange."
   }
@@ -475,21 +501,25 @@ for ($part = 0; $part -lt $BulkParts; $part++) {
   if (-not $profiles -or @($profiles).Count -eq 0) { break }
   $acceptedProfiles = 0
   $skippedProfiles = 0
+  $skipReasons = [ordered]@{ invalidSymbol = 0; nonUsListing = 0; marketCap = 0 }
   foreach ($profile in @($profiles)) {
     $symbol = Get-ProfileSymbol $profile
     if (-not (Test-ValidSymbol $symbol)) {
       $skippedProfiles++
+      $skipReasons.invalidSymbol++
       continue
     }
     $indexes = if ($IndexMembership.ContainsKey($symbol)) { $IndexMembership[$symbol] } else { @() }
     $isIndexMember = @($indexes).Count -gt 0
     if (-not (Test-IsUsListedProfile $profile $isIndexMember)) {
       $skippedProfiles++
+      $skipReasons.nonUsListing++
       continue
     }
     $marketCap = Get-Number @($profile.mktCap, $profile.marketCap, 0) 0
     if (-not $isIndexMember -and -not (Test-IsEtf $profile) -and $marketCap -lt $MinMarketCap) {
       $skippedProfiles++
+      $skipReasons.marketCap++
       continue
     }
     $mapped = Map-Profile $profile
@@ -500,7 +530,7 @@ for ($part = 0; $part -lt $BulkParts; $part++) {
     $Db.assets[$symbol] = Compact-AssetRow $mapped @($indexes)
     $acceptedProfiles++
   }
-  Write-Host "Mapped $acceptedProfiles profiles from part $part. Skipped $skippedProfiles."
+  Write-Host "Mapped $acceptedProfiles profiles from part $part. Skipped $skippedProfiles. invalidSymbol=$($skipReasons.invalidSymbol), nonUsListing=$($skipReasons.nonUsListing), marketCap=$($skipReasons.marketCap)."
 }
 
 Write-Host "Mapped $($Db.assets.Count) assets before overrides."
@@ -524,6 +554,8 @@ if (Test-Path $OverridesFile) {
     $Db.assets[$symbol] = Compact-AssetRow $mapped $indexes
   }
 }
+
+Write-Host "Mapped $($Db.assets.Count) assets after overrides."
 
 $sortedAssets = [ordered]@{}
 @($Db.assets.Keys) |
