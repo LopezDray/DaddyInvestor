@@ -462,6 +462,8 @@ let selectedProfile = "balanced";
 let assetRows = [];
 let assetSortMode = "group";
 const UNSAVED_EXIT_WARNING = "ระบบยังไม่สามารถบันทึก รบกวน Capture หน้าจอ";
+const HTML2CANVAS_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+let html2CanvasLoader = null;
 
 const SAMPLE_ASSETS = [
   { symbol: "PLTR", amount: 1600 },
@@ -1363,12 +1365,111 @@ function setProfile(profileKey) {
   runAnalysis();
 }
 
+function formatReportTimestamp() {
+  return new Date().toLocaleString("th-TH-u-ca-gregory", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function fileTimestamp() {
+  const date = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}`;
+}
+
+function updateReportStamp() {
+  const stamp = `บันทึกเมื่อ ${formatReportTimestamp()}`;
+  $("reportStamp").textContent = stamp;
+  return stamp;
+}
+
+function setExportMode(enabled) {
+  document.body.classList.toggle("is-exporting", enabled);
+}
+
+function loadHtml2Canvas() {
+  if (window.html2canvas) return Promise.resolve(window.html2canvas);
+  if (html2CanvasLoader) return html2CanvasLoader;
+
+  html2CanvasLoader = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = HTML2CANVAS_URL;
+    script.async = true;
+    script.onload = () => window.html2canvas ? resolve(window.html2canvas) : reject(new Error("html2canvas unavailable"));
+    script.onerror = () => reject(new Error("load failed"));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    html2CanvasLoader = null;
+    throw error;
+  });
+
+  return html2CanvasLoader;
+}
+
+async function saveReportImage() {
+  const button = $("saveImageButton");
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "กำลังบันทึก...";
+  updateReportStamp();
+  setExportMode(true);
+
+  try {
+    const html2canvas = await loadHtml2Canvas();
+    if (document.fonts?.ready) await document.fonts.ready;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    const target = document.querySelector(".planner-shell");
+    const canvas = await html2canvas(target, {
+      backgroundColor: "#f6f8f6",
+      scale: Math.min(window.devicePixelRatio || 1, 2),
+      useCORS: true,
+      scrollX: 0,
+      scrollY: -window.scrollY,
+      windowWidth: Math.max(document.documentElement.clientWidth, target.scrollWidth),
+    });
+
+    const link = document.createElement("a");
+    link.download = `daddy-portfolio-health-${fileTimestamp()}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  } catch (error) {
+    window.alert("บันทึกรูปไม่สำเร็จ ลองบันทึกเป็น PDF แทน หรือเช็กการเชื่อมต่ออินเทอร์เน็ต");
+  } finally {
+    setExportMode(false);
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
+function printReportPdf() {
+  updateReportStamp();
+  setExportMode(true);
+  window.print();
+}
+
+window.addEventListener("beforeprint", () => {
+  updateReportStamp();
+  setExportMode(true);
+});
+
+window.addEventListener("afterprint", () => {
+  setExportMode(false);
+});
+
 document.querySelectorAll(".profile-tab").forEach((button) => {
   button.addEventListener("click", () => setProfile(button.dataset.profile));
 });
 
 $("addAssetButton").addEventListener("click", addAssetFromForm);
 $("loadSampleButton").addEventListener("click", loadSampleAssets);
+$("saveImageButton").addEventListener("click", saveReportImage);
+$("savePdfButton").addEventListener("click", printReportPdf);
 $("clearAssetsButton").addEventListener("click", () => {
   assetRows = [];
   renderEntryTable();

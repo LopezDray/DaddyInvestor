@@ -130,6 +130,65 @@ button:hover {
   background: var(--green-soft);
 }
 
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.report-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.report-button {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--green);
+  font-size: 0.9rem;
+  padding: 0 14px;
+}
+
+.report-button:hover {
+  border-color: rgba(22, 113, 95, 0.32);
+  background: var(--green-soft);
+}
+
+.report-button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.report-stamp {
+  display: none;
+  margin: -4px 0 14px;
+  border: 1px solid rgba(47, 118, 104, 0.2);
+  border-radius: 8px;
+  background: #f5fbf8;
+  color: #355046;
+  font-size: 0.86rem;
+  font-weight: 800;
+  padding: 10px 14px;
+}
+
+body.is-exporting .report-stamp {
+  display: block;
+}
+
+body.is-exporting .report-actions,
+body.is-exporting .ghost-link {
+  display: none;
+}
+
+body.is-exporting .entry-grid,
+body.is-exporting .button-row,
+body.is-exporting .asset-tools {
+  display: none;
+}
+
 .planner-grid {
   display: grid;
   grid-template-columns: 600px minmax(0, 1fr);
@@ -921,6 +980,20 @@ tr:last-child td {
     font-size: 1.35rem;
   }
 
+  .top-actions,
+  .report-actions {
+    width: 100%;
+  }
+
+  .report-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .report-button {
+    width: 100%;
+  }
+
   .ghost-link {
     width: 100%;
   }
@@ -1060,5 +1133,87 @@ tr:last-child td {
     align-items: flex-start;
     flex-direction: column;
     gap: 2px;
+  }
+}
+
+@media print {
+  @page {
+    margin: 12mm;
+    size: A4;
+  }
+
+  body {
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .planner-shell {
+    width: 100%;
+    padding: 0;
+  }
+
+  .top-bar {
+    margin-bottom: 10px;
+  }
+
+  .brand-mark img {
+    width: 54px;
+    height: 54px;
+  }
+
+  .brand-mark h1 {
+    font-size: 1.55rem;
+  }
+
+  .report-stamp {
+    display: block !important;
+    margin: 0 0 10px;
+  }
+
+  .report-actions,
+  .ghost-link,
+  .entry-grid,
+  .button-row,
+  .asset-tools {
+    display: none !important;
+  }
+
+  .planner-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .input-panel,
+  .output-panel,
+  .detail-panel,
+  .current-panel,
+  .scenario-panel,
+  .target-choice-panel,
+  .rebalance-panel,
+  .view-panel,
+  .recommendation-panel {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+
+  .input-panel,
+  .output-panel {
+    padding: 14px;
+  }
+
+  .mix-chart-layout {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+
+  .mix-pie {
+    width: 170px;
+  }
+
+  .source-band {
+    box-shadow: none;
+    break-inside: avoid;
+    margin-top: 10px;
   }
 }

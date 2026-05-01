@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ตรวจสุขภาพพอร์ต | คุณพ่อนักลงทุน</title>
-    <link rel="stylesheet" href="portfolio-sample.css?v=20260501-current-assets">
+    <link rel="stylesheet" href="portfolio-sample.css?v=20260501-export">
   </head>
   <body>
     <main class="planner-shell">
@@ -16,8 +16,16 @@
             <h1>ตรวจสุขภาพพอร์ต</h1>
           </div>
         </div>
-        <a class="ghost-link" href="./index.html">จังหวะลงทุน</a>
+        <div class="top-actions">
+          <div class="report-actions" aria-label="บันทึกรายงาน">
+            <button id="saveImageButton" class="report-button" type="button">บันทึกรูป</button>
+            <button id="savePdfButton" class="report-button" type="button">บันทึก PDF</button>
+          </div>
+          <a class="ghost-link" href="./index.html">จังหวะลงทุน</a>
+        </div>
       </header>
+
+      <div class="report-stamp" id="reportStamp">บันทึกเมื่อ -</div>
 
       <section class="planner-grid">
         <aside class="input-panel" aria-label="กรอกพอร์ต">
@@ -179,6 +187,6 @@
 
     <script src="assets/api-config.js"></script>
     <script src="assets/us-assets-lite.js"></script>
-    <script src="portfolio-sample.js?v=20260501-rebalance-money"></script>
+    <script src="portfolio-sample.js?v=20260501-export"></script>
   </body>
 </html>
