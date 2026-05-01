@@ -11,15 +11,58 @@ const state = {
   candles: [],
   analysis: null,
   symbol: "AAPL",
+  displaySymbol: "AAPL",
+  instrument: null,
   provider: "Stooq free daily data",
   quote: null,
   finnhubKey: "",
   requestId: 0,
 };
 
-function money(value) {
+const SYMBOL_ALIASES = {
+  XAUUSD: { dataSymbol: "XAUUSD=X", displaySymbol: "XAUUSD", label: "ทองโลก USD", prefix: "$", suffix: "", yahooOnly: true },
+  "XAUUSD=X": { dataSymbol: "XAUUSD=X", displaySymbol: "XAUUSD", label: "ทองโลก USD", prefix: "$", suffix: "", yahooOnly: true },
+  GOLD: { dataSymbol: "XAUUSD=X", displaySymbol: "XAUUSD", label: "ทองโลก USD", prefix: "$", suffix: "", yahooOnly: true },
+  BTC: { dataSymbol: "BTC-USD", displaySymbol: "BTC", label: "Bitcoin USD", prefix: "$", suffix: "", yahooOnly: true },
+  BTCUSD: { dataSymbol: "BTC-USD", displaySymbol: "BTC", label: "Bitcoin USD", prefix: "$", suffix: "", yahooOnly: true },
+  "BTC-USD": { dataSymbol: "BTC-USD", displaySymbol: "BTC", label: "Bitcoin USD", prefix: "$", suffix: "", yahooOnly: true },
+  ETH: { dataSymbol: "ETH-USD", displaySymbol: "ETH", label: "Ethereum USD", prefix: "$", suffix: "", yahooOnly: true },
+  ETHUSD: { dataSymbol: "ETH-USD", displaySymbol: "ETH", label: "Ethereum USD", prefix: "$", suffix: "", yahooOnly: true },
+  "ETH-USD": { dataSymbol: "ETH-USD", displaySymbol: "ETH", label: "Ethereum USD", prefix: "$", suffix: "", yahooOnly: true },
+  SET: { dataSymbol: "SET.BK", displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
+  SETINDEX: { dataSymbol: "SET.BK", displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
+  "SET.BK": { dataSymbol: "SET.BK", displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
+  "^SET.BK": { dataSymbol: "SET.BK", displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
+};
+
+function instrumentDefaults(symbol) {
+  return {
+    dataSymbol: symbol,
+    displaySymbol: symbol,
+    label: "สินทรัพย์จดทะเบียนสหรัฐ",
+    prefix: "$",
+    suffix: "",
+    yahooOnly: false,
+  };
+}
+
+function resolveInstrument(raw) {
+  const clean = normalizeSymbol(raw) || "AAPL";
+  const compact = clean.replace(/[./]/g, "");
+  const alias = SYMBOL_ALIASES[clean] || SYMBOL_ALIASES[compact];
+  return alias ? { ...alias } : instrumentDefaults(clean);
+}
+
+function money(value, symbol = state.symbol) {
   if (!Number.isFinite(value)) return "-";
-  return `$${value.toFixed(value >= 100 ? 2 : 3)}`;
+  const instrument = symbol === state.symbol ? state.instrument : SYMBOL_ALIASES[symbol];
+  const prefix = instrument?.prefix ?? "$";
+  const suffix = instrument?.suffix ?? "";
+  const decimals = value >= 100 ? 2 : 3;
+  return `${prefix}${value.toLocaleString("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })}${suffix}`;
 }
 
 function pct(value) {
@@ -39,7 +82,7 @@ function formatMarketDate(dateText) {
 }
 
 function normalizeSymbol(raw) {
-  return raw.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, "");
+  return raw.trim().toUpperCase().replace(/[^A-Z0-9.^=-]/g, "");
 }
 
 function getFinnhubKey() {
@@ -47,6 +90,7 @@ function getFinnhubKey() {
 }
 
 function toStooqSymbol(symbol) {
+  if (SYMBOL_ALIASES[symbol]?.yahooOnly) return null;
   if (symbol.includes(".")) return symbol.toLowerCase();
   return `${symbol}.us`.toLowerCase();
 }
@@ -104,7 +148,9 @@ function setCachedCandles(symbol, candles) {
 }
 
 async function fetchStooq(symbol) {
-  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(toStooqSymbol(symbol))}&i=d`;
+  const stooqSymbol = toStooqSymbol(symbol);
+  if (!stooqSymbol) throw new Error("Stooq ไม่มีชุดข้อมูลสำหรับสินทรัพย์นี้");
+  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(stooqSymbol)}&i=d`;
   const csv = await fetchText(url);
   const candles = parseStooqCsv(csv);
   if (candles.length < 180) throw new Error("ข้อมูลย้อนหลังไม่พอสำหรับคำนวณระยะยาว");
@@ -631,7 +677,7 @@ function updateSummary(symbol, analysis, isSample) {
     $("zoneReason").textContent = `${scoreText}: ราคาอยู่ห่าง EMA200 ${pct(analysis.emaDistance)} และเทรนด์คือ ${analysis.trendState}`;
   }
   $("statusPill").textContent = isSample ? "ข้อมูลตัวอย่าง" : "ราคาปิดล่าสุด";
-  $("dataSource").textContent = state.provider;
+  $("dataSource").textContent = state.instrument?.label ? `${state.provider} · ${state.instrument.label}` : state.provider;
   renderLists(analysis);
 }
 
@@ -856,7 +902,7 @@ function smoothDisplaySeries(series, period) {
   return output;
 }
 
-async function loadRealCandles(symbol) {
+async function loadRealCandles(symbol, instrument = state.instrument) {
   const errors = [];
 
   try {
@@ -866,6 +912,10 @@ async function loadRealCandles(symbol) {
     return candles;
   } catch (error) {
     errors.push(`Yahoo: ${error.message}`);
+  }
+
+  if (instrument?.yahooOnly) {
+    throw new Error(errors.join(" | "));
   }
 
   try {
@@ -923,10 +973,13 @@ function drawMessageChart(message) {
 }
 
 async function runAnalysis(symbol = state.symbol) {
-  const cleanSymbol = normalizeSymbol(symbol) || "AAPL";
+  const instrument = resolveInstrument(symbol);
+  const cleanSymbol = instrument.dataSymbol;
   const requestId = state.requestId + 1;
   state.requestId = requestId;
   state.symbol = cleanSymbol;
+  state.displaySymbol = instrument.displaySymbol;
+  state.instrument = instrument;
   $("statusPill").textContent = "กำลังโหลด...";
 
   let candles = getCachedCandles(cleanSymbol);
@@ -935,10 +988,10 @@ async function runAnalysis(symbol = state.symbol) {
     state.provider = "Cached real daily close";
   } else {
     try {
-      candles = await loadRealCandles(cleanSymbol);
+      candles = await loadRealCandles(cleanSymbol, instrument);
     } catch (error) {
       if (requestId !== state.requestId) return;
-      renderLoadError(cleanSymbol);
+      renderLoadError(state.displaySymbol);
       return;
     }
   }
@@ -949,13 +1002,21 @@ async function runAnalysis(symbol = state.symbol) {
   state.candles = candles;
   state.quote = null;
   state.analysis = analyze(candles, lookback, riskMode, null);
-  updateSummary(cleanSymbol, state.analysis, false);
+  updateSummary(state.displaySymbol, state.analysis, false);
   drawChart();
 }
 
 $("searchForm").addEventListener("submit", (event) => {
   event.preventDefault();
   runAnalysis($("symbolInput").value);
+});
+
+document.querySelectorAll("[data-symbol]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const symbol = button.dataset.symbol;
+    $("symbolInput").value = symbol;
+    runAnalysis(symbol);
+  });
 });
 
 $("lookbackSelect").addEventListener("change", () => runAnalysis(state.symbol));

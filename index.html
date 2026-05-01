@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>จังหวะลงทุน</title>
-    <link rel="stylesheet" href="styles.css?v=20260501-align">
+    <link rel="stylesheet" href="styles.css?v=20260501-markets">
   </head>
   <body>
     <main class="app-shell">
@@ -23,10 +23,16 @@
           <form class="search-form" id="searchForm">
             <label for="symbolInput">ชื่อหุ้น</label>
             <div class="symbol-row">
-              <input id="symbolInput" name="symbol" value="AAPL" placeholder="เช่น AAPL, BABA, TSM" autocomplete="off">
+              <input id="symbolInput" name="symbol" value="AAPL" placeholder="เช่น AAPL, XAUUSD, BTC, ETH, SET" autocomplete="off">
               <button type="submit">วิเคราะห์</button>
             </div>
-            <p class="hint">รองรับหุ้น/ADR ที่จดทะเบียนในสหรัฐ เช่น หุ้นอเมริกา หุ้นจีน และบริษัทต่างประเทศที่เทรดใน NYSE/Nasdaq ระบบจะใช้ราคาปิดวันทำการล่าสุดเป็นหลัก</p>
+            <div class="quick-symbols" aria-label="สินทรัพย์ยอดนิยม">
+              <button type="button" data-symbol="XAUUSD">XAUUSD</button>
+              <button type="button" data-symbol="BTC">BTC</button>
+              <button type="button" data-symbol="ETH">ETH</button>
+              <button type="button" data-symbol="SET">SET</button>
+            </div>
+            <p class="hint">รองรับหุ้น/ADR ที่จดทะเบียนในสหรัฐ รวมถึงทองโลก Bitcoin Ethereum และดัชนี SET โดยใช้ราคาปิดวันทำการล่าสุดเป็นหลัก</p>
           </form>
 
           <div class="setting-grid">
@@ -125,6 +131,6 @@
       </section>
     </main>
 
-    <script src="app.js?v=20260426-close2"></script>
+    <script src="app.js?v=20260501-markets"></script>
   </body>
 </html>

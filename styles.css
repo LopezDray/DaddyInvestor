@@ -190,6 +190,25 @@ button:hover {
   background: #105d4e;
 }
 
+.quick-symbols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.quick-symbols button {
+  min-height: 34px;
+  border: 1px solid #c8d8d2;
+  background: #f4faf7;
+  color: var(--green);
+  padding: 0 12px;
+}
+
+.quick-symbols button:hover {
+  background: #e3f1eb;
+}
+
 .hint {
   margin: 10px 0 0;
   font-size: 0.78rem;
