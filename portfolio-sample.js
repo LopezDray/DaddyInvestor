@@ -971,18 +971,23 @@ function renderRebalancePlan(result) {
     .map((item) => {
       const action = item.delta > 0 ? "เพิ่ม" : "ลด";
       const className = item.delta > 0 ? "add" : "reduce";
-      const money = capital ? ` / ${formatMoney(Math.abs(item.delta) * capital / 100)}` : "";
+      const moneyAmount = capital ? Math.abs(item.delta) * capital / 100 : 0;
+      const money = capital ? formatMoney(moneyAmount) : "";
+      const moneyLabel = money ? ` / ${money}` : "";
       const sleeve = SLEEVES[item.sleeve];
       const parts = rebalanceComponents(result, item.sleeve, item.delta);
       const componentText = parts.length
-        ? parts.map((asset) => `<span class="mini-chip">${asset.symbol} ${formatPct(asset.weight)}</span>`).join("")
-        : `<span class="mini-chip">${sleeveFallback(item.sleeve, item.delta > 0)}</span>`;
+        ? parts.map((asset) => {
+          const assetMoney = capital ? ` / ${formatMoney(asset.weight * capital / 100)}` : "";
+          return `<span class="mini-chip">${asset.symbol} ${formatPct(asset.weight)}${assetMoney}</span>`;
+        }).join("")
+        : `<span class="mini-chip">${sleeveFallback(item.sleeve, item.delta > 0)}${moneyLabel}</span>`;
 
       return `
         <article class="rebalance-card group-card">
           <div>
-            <strong>${sleeve.label} <span>${action} ${formatPct(Math.abs(item.delta))}</span></strong>
-            <small>ตอนนี้ ${formatPct(item.current)} / เป้าหมาย ${formatPct(item.target)}${money}</small>
+            <strong>${sleeve.label} <span>${action} ${formatPct(Math.abs(item.delta))}${moneyLabel}</span></strong>
+            <small>ตอนนี้ ${formatPct(item.current)} / เป้าหมาย ${formatPct(item.target)}</small>
             <div class="rebalance-components">${componentText}</div>
           </div>
           <span class="rebalance-change ${className}">${action}</span>
