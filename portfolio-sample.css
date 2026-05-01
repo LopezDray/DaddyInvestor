@@ -685,6 +685,41 @@ textarea {
   padding: 0 10px;
 }
 
+.mini-chip.theme-chip {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 100%;
+  min-height: auto;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.chip-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  line-height: 1.25;
+}
+
+.chip-main b {
+  color: var(--green);
+}
+
+.chip-detail {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.rebalance-principle {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .rebalance-change {
   display: inline-flex;
   align-items: center;

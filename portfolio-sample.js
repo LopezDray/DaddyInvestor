@@ -45,6 +45,54 @@ const PROFILES = {
   },
 };
 
+const REBALANCE_THEME_GUIDE = {
+  cash: {
+    fallback: "T-Bill / Money Market / เงินพักระยะสั้น",
+    principle: "เพิ่มสภาพคล่องและตราสารหนี้สั้นเพื่อลดแรงบังคับขาย และมีเงินสำรองเมื่อสินทรัพย์เสี่ยงปรับฐาน",
+    add: [
+      { label: "T-Bill / Money Market", detail: "เงินพักระยะสั้น duration ต่ำ", weight: 65 },
+      { label: "Cash Reserve", detail: "กระสุนสำรองสำหรับจังหวะตลาดตก", weight: 35 },
+    ],
+  },
+  hedge: {
+    fallback: "ทองคำ, Energy, Consumer Staples, Utilities, Defense/Cyber",
+    principle: "เพิ่มสินทรัพย์และธุรกิจที่ช่วยรับมือเงินเฟ้อ, supply shock, สงคราม และเศรษฐกิจชะลอ",
+    add: [
+      { label: "ทองคำ / Precious Metals", detail: "กันค่าเงินและความเสี่ยงระบบ", weight: 24 },
+      { label: "Energy / Oil & Gas", detail: "รับมือพลังงานแพงและ supply shock", weight: 22 },
+      { label: "Consumer Staples", detail: "ของกินของใช้จำเป็น รายได้ทนวัฏจักร", weight: 20 },
+      { label: "Defense / Cybersecurity", detail: "งบความมั่นคงและโครงสร้างพื้นฐานดิจิทัล", weight: 19 },
+      { label: "Utilities / Infrastructure", detail: "ไฟฟ้า น้ำ ท่อส่ง กระแสเงินสดจำเป็น", weight: 15 },
+    ],
+  },
+  growth: {
+    fallback: "AI, Software, Semiconductor, Nuclear, Electrification",
+    principle: "เพิ่มธุรกิจที่โตตามรายได้หรือกำไรระยะยาว แต่กระจายหลาย sub-theme เพื่อลด single-stock และ valuation risk",
+    add: [
+      { label: "AI / Software / Cloud", detail: "ธุรกิจโตจาก productivity และ recurring revenue", weight: 25 },
+      { label: "Semiconductor / Data Center", detail: "โครงสร้างพื้นฐาน compute และ memory cycle", weight: 22 },
+      { label: "Electrification / Power Grid", detail: "ไฟฟ้า grid capex และ industrial automation", weight: 18 },
+      { label: "Nuclear / Clean Power", detail: "ไฟฟ้าฐานสำหรับ data center และ energy security", weight: 15 },
+      { label: "Healthcare Innovation", detail: "growth ที่ไม่ผูกกับ consumer cycle อย่างเดียว", weight: 20 },
+    ],
+  },
+  diversified: {
+    fallback: "Developed ex-US, Emerging Asia, Commodity-linked markets",
+    principle: "เพิ่มเศรษฐกิจและสกุลเงินที่ไม่ได้ขึ้นตรงกับสหรัฐทั้งหมด เพื่อลด home-country concentration",
+    add: [
+      { label: "Developed ex-US", detail: "ญี่ปุ่น ยุโรป และประเทศพัฒนาแล้วนอกสหรัฐ", weight: 35 },
+      { label: "Emerging Asia", detail: "อินเดีย ASEAN เกาหลี ไต้หวันบางส่วน", weight: 25 },
+      { label: "Commodity-linked Markets", detail: "แคนาดา ออสเตรเลีย บราซิล กลุ่มทรัพยากร", weight: 20 },
+      { label: "Global Quality ETF", detail: "บริษัทหลายประเทศ หลายสกุลเงิน", weight: 20 },
+    ],
+  },
+  unknown: {
+    fallback: "ตรวจ sector ก่อนจัดเข้าหมวด",
+    principle: "สินทรัพย์ที่ยังไม่รู้กลุ่มควรตรวจ sector/industry ก่อนนำไปคิดแผน rebalance",
+    add: [],
+  },
+};
+
 const BASE_TARGETS = {
   PLTR: 8,
   MRVL: 8,
@@ -979,11 +1027,9 @@ function renderRebalancePlan(result) {
       const sleeve = SLEEVES[item.sleeve];
       const parts = rebalanceComponents(result, item.sleeve, item.delta);
       const componentText = parts.length
-        ? parts.map((asset) => {
-          const assetMoney = capital ? ` / ${formatMoney(asset.weight * capital / 100)}` : "";
-          return `<span class="mini-chip">${asset.symbol} ${formatPct(asset.weight)}${assetMoney}</span>`;
-        }).join("")
+        ? parts.map((asset) => renderRebalanceComponent(asset, capital)).join("")
         : `<span class="mini-chip">${sleeveFallback(item.sleeve, item.delta > 0)}${moneyLabel}</span>`;
+      const principle = rebalancePrinciple(item.sleeve, item.delta > 0);
 
       return `
         <article class="rebalance-card group-card">
@@ -991,6 +1037,7 @@ function renderRebalancePlan(result) {
             <strong>${sleeve.label} <span>${action} ${formatPct(Math.abs(item.delta))}${moneyLabel}</span></strong>
             <small>ตอนนี้ ${formatPct(item.current)} / เป้าหมาย ${formatPct(item.target)}</small>
             <div class="rebalance-components">${componentText}</div>
+            ${principle ? `<p class="rebalance-principle">${escapeHtml(principle)}</p>` : ""}
           </div>
           <span class="rebalance-change ${className}">${action}</span>
         </article>
@@ -1014,19 +1061,19 @@ function rebalanceComponents(result, sleeve, delta) {
 }
 
 function additionComponents(sleeve, amount) {
-  const candidates = Object.entries(BASE_TARGETS)
-    .map(([symbol, baseWeight]) => ({ symbol, baseWeight, meta: ASSET_MAP[symbol] }))
-    .filter((item) => item.meta?.sleeve === sleeve);
-  const totalBase = candidates.reduce((sum, item) => sum + item.baseWeight, 0);
+  const guide = REBALANCE_THEME_GUIDE[sleeve];
+  const candidates = guide?.add || [];
+  const totalBase = candidates.reduce((sum, item) => sum + item.weight, 0);
   if (!totalBase) return [];
 
   return candidates
     .map((item) => ({
-      symbol: item.symbol,
-      weight: amount * item.baseWeight / totalBase,
+      type: "theme",
+      label: item.label,
+      detail: item.detail,
+      weight: amount * item.weight / totalBase,
     }))
     .filter((item) => item.weight >= 0.5)
-    .sort((a, b) => b.weight - a.weight)
     .slice(0, 5);
 }
 
@@ -1037,6 +1084,8 @@ function reductionComponents(result, sleeve, amount) {
 
   return candidates
     .map((item) => ({
+      type: "holding",
+      label: item.symbol,
       symbol: item.symbol,
       weight: amount * item.normalizedWeight / totalCurrent,
     }))
@@ -1046,15 +1095,27 @@ function reductionComponents(result, sleeve, amount) {
 }
 
 function sleeveFallback(sleeve, isAdding) {
-  const examplesBySleeve = {
-    growth: "PLTR / MRVL / MU / TSLA",
-    diversified: "EWJ",
-    hedge: "IAU / OXY / CF / CHKP",
-    cash: "SGOV",
-  };
+  if (!isAdding) return "ทยอยลดสินทรัพย์จริงในหมวดที่เกินแผน";
+  return REBALANCE_THEME_GUIDE[sleeve]?.fallback || "";
+}
 
-  if (!isAdding) return "ทยอยลดตัวที่เกินแผน";
-  return examplesBySleeve[sleeve] || "";
+function rebalancePrinciple(sleeve, isAdding) {
+  if (!isAdding) return "ฝั่งลดใช้หุ้นจริงที่ผู้ใช้กรอก ไม่ใช้หุ้นตัวอย่าง เพื่อให้คำแนะนำตรงกับความเสี่ยงที่มีอยู่ในพอร์ต";
+  return REBALANCE_THEME_GUIDE[sleeve]?.principle || "";
+}
+
+function renderRebalanceComponent(item, capital) {
+  const money = capital ? ` / ${formatMoney(item.weight * capital / 100)}` : "";
+  if (item.type === "theme") {
+    return `
+      <span class="mini-chip theme-chip">
+        <span class="chip-main">${escapeHtml(item.label)} <b>${formatPct(item.weight)}${money}</b></span>
+        <span class="chip-detail">${escapeHtml(item.detail || "")}</span>
+      </span>
+    `;
+  }
+
+  return `<span class="mini-chip holding-chip">${escapeHtml(item.symbol || item.label)} ${formatPct(item.weight)}${money}</span>`;
 }
 
 function buildPortfolioView(result) {
