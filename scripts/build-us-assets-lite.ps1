@@ -180,7 +180,7 @@ function Get-ScreenerProfiles {
 
     foreach ($row in @($rows)) {
       $symbol = Normalize-Symbol $row.symbol
-      if (-not $symbol -or $seen.ContainsKey($symbol)) { continue }
+      if (-not (Test-ValidSymbol $symbol) -or $seen.ContainsKey($symbol)) { continue }
       $seen[$symbol] = $true
       $profiles.Add($row)
     }
@@ -315,6 +315,14 @@ function Normalize-Symbol($Symbol) {
   ([string]$Symbol).Trim().ToUpperInvariant().Replace("-", ".") -replace "[^A-Z0-9.]", ""
 }
 
+function Test-ValidSymbol($Symbol) {
+  $text = [string]$Symbol
+  if (-not $text) { return $false }
+  if ($text -in @("N/A", "NA", "NONE", "NULL", "CASH")) { return $false }
+  if ($text.Length -gt 12) { return $false }
+  $text -match "^[A-Z0-9]+(\.[A-Z0-9]+)?$"
+}
+
 function Test-IsUsExchange($Exchange) {
   $text = ([string]$Exchange).Trim().ToUpperInvariant()
   if (-not $text) { return $false }
@@ -377,7 +385,7 @@ foreach ($indexName in $IndexEtfs.Keys) {
   $holdings = Get-Holdings $IndexEtfs[$indexName] $indexName
   foreach ($holding in @($holdings)) {
     $symbol = Normalize-Symbol (First-Value @($holding.symbol, $holding.asset, $holding.holdingSymbol, $holding.ticker))
-    if ($symbol -and $symbol -ne "N/A" -and $symbol -ne "CASH") { Add-IndexMembership $symbol $indexName }
+    if (Test-ValidSymbol $symbol) { Add-IndexMembership $symbol $indexName }
   }
 }
 
@@ -449,7 +457,7 @@ for ($part = 0; $part -lt $BulkParts; $part++) {
   if (-not $profiles -or @($profiles).Count -eq 0) { break }
   foreach ($profile in @($profiles)) {
     $symbol = Normalize-Symbol $profile.symbol
-    if (-not $symbol) { continue }
+    if (-not (Test-ValidSymbol $symbol)) { continue }
     $indexes = if ($IndexMembership.ContainsKey($symbol)) { $IndexMembership[$symbol] } else { @() }
     $isIndexMember = @($indexes).Count -gt 0
     if (-not (Test-IsUsListedProfile $profile $isIndexMember)) { continue }
@@ -468,6 +476,7 @@ if (Test-Path $OverridesFile) {
   $overrides = Get-Content -LiteralPath $OverridesFile -Raw -Encoding utf8 | ConvertFrom-Json
   foreach ($item in $overrides.PSObject.Properties) {
     $symbol = Normalize-Symbol $item.Name
+    if (-not (Test-ValidSymbol $symbol)) { continue }
     $value = $item.Value
     $indexes = if ($value.indexes) { @($value.indexes) } elseif ($IndexMembership.ContainsKey($symbol)) { @($IndexMembership[$symbol]) } else { @() }
     $mapped = [pscustomobject]@{
@@ -484,7 +493,10 @@ if (Test-Path $OverridesFile) {
 }
 
 $sortedAssets = [ordered]@{}
-$Db.assets.Keys | Sort-Object | ForEach-Object { $sortedAssets[$_] = $Db.assets[$_] }
+@($Db.assets.Keys) |
+  Where-Object { Test-ValidSymbol $_ } |
+  Sort-Object |
+  ForEach-Object { $sortedAssets[[string]$_] = $Db.assets[[string]$_] }
 $Db.assets = $sortedAssets
 
 $coverage = [ordered]@{}
