@@ -1,0 +1,18 @@
+﻿{
+    "SP500":  {
+                  "proxy":  "IVV",
+                  "total":  1,
+                  "covered":  1,
+                  "missing":  [
+
+                              ]
+              },
+    "RUSSELL2000":  {
+                        "proxy":  "IWM",
+                        "total":  1,
+                        "covered":  1,
+                        "missing":  [
+
+                                    ]
+                    }
+}
