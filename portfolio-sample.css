@@ -132,7 +132,7 @@ button:hover {
 
 .planner-grid {
   display: grid;
-  grid-template-columns: 380px minmax(0, 1fr);
+  grid-template-columns: 460px minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
@@ -294,12 +294,30 @@ textarea {
 }
 
 .entry-table {
-  min-width: 420px;
+  min-width: 560px;
+  table-layout: fixed;
 }
 
 .entry-table th,
 .entry-table td {
-  padding: 10px;
+  padding: 11px 12px;
+}
+
+.entry-table th:nth-child(1),
+.entry-table td:nth-child(1) {
+  width: 78px;
+}
+
+.entry-table th:nth-child(2),
+.entry-table td:nth-child(2) {
+  width: 196px;
+}
+
+.entry-table th:nth-child(3),
+.entry-table td:nth-child(3),
+.entry-table th:nth-child(4),
+.entry-table td:nth-child(4) {
+  width: 104px;
 }
 
 .sleeve-cell {

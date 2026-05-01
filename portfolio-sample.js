@@ -460,6 +460,7 @@ const ASSET_MAP = {
 
 let selectedProfile = "balanced";
 let assetRows = [];
+const UNSAVED_EXIT_WARNING = "ระบบยังไม่สามารถบันทึก รบกวน Capture หน้าจอ";
 
 const SAMPLE_ASSETS = [
   { symbol: "PLTR", amount: 8000 },
@@ -1338,6 +1339,13 @@ $("entryTable").addEventListener("click", (event) => {
 });
 
 $("symbolInput").addEventListener("input", renderLookupHint);
+
+window.addEventListener("beforeunload", (event) => {
+  if (!assetRows.length) return;
+  event.preventDefault();
+  event.returnValue = UNSAVED_EXIT_WARNING;
+  return UNSAVED_EXIT_WARNING;
+});
 
 loadSampleAssets();
 renderLookupHint();
