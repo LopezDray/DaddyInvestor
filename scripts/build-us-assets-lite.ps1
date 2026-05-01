@@ -178,13 +178,16 @@ function Get-ScreenerProfiles {
       }
     }
 
+    $accepted = 0
     foreach ($row in @($rows)) {
-      $symbol = Normalize-Symbol $row.symbol
+      $symbol = Get-ProfileSymbol $row
       if (-not (Test-ValidSymbol $symbol) -or $seen.ContainsKey($symbol)) { continue }
       Add-Member -InputObject $row -NotePropertyName "_screenerExchange" -NotePropertyValue $exchange -Force
       $seen[$symbol] = $true
+      $accepted++
       $profiles.Add($row)
     }
+    Write-Host "Accepted $accepted unique profiles from $exchange."
   }
 
   Write-Host "Screener source returned $($profiles.Count) unique profiles."
@@ -316,6 +319,16 @@ function Normalize-Symbol($Symbol) {
   ([string]$Symbol).Trim().ToUpperInvariant().Replace("-", ".") -replace "[^A-Z0-9.]", ""
 }
 
+function Get-ProfileSymbol($Profile) {
+  Normalize-Symbol (First-Value @(
+    $Profile.symbol,
+    $Profile.ticker,
+    $Profile.asset,
+    $Profile.holdingSymbol,
+    $Profile.securitySymbol
+  ))
+}
+
 function Test-ValidSymbol($Symbol) {
   $text = [string]$Symbol
   if (-not $text) { return $false }
@@ -416,15 +429,17 @@ function Get-Risk($Sleeve, $Beta) {
 }
 
 function Map-Profile($Profile) {
-  $name = if ($Profile.companyName) { $Profile.companyName } elseif ($Profile.name) { $Profile.name } else { $Profile.symbol }
+  $name = if ($Profile.companyName) { $Profile.companyName } elseif ($Profile.company) { $Profile.company } elseif ($Profile.name) { $Profile.name } else { Get-ProfileSymbol $Profile }
   $isEtf = Test-IsEtf $Profile
-  $sectorCode = Get-SectorCode $Profile.sector $isEtf
-  $text = "$($Profile.companyName) $($Profile.name) $($Profile.sector) $($Profile.industry)".ToLowerInvariant()
+  $sectorText = First-Value @($Profile.sector, $Profile.sectorName)
+  $industryText = First-Value @($Profile.industry, $Profile.industryName)
+  $sectorCode = Get-SectorCode $sectorText $isEtf
+  $text = "$($Profile.companyName) $($Profile.company) $($Profile.name) $sectorText $industryText".ToLowerInvariant()
   $rule = $Rules | Where-Object {
     $keywords = $_.Keywords
     $keywords | Where-Object { $text.Contains($_) } | Select-Object -First 1
   } | Select-Object -First 1
-  $industry = if ($rule) { $rule.Industry } elseif ($Profile.industry) { ([string]$Profile.industry) -replace "[^A-Za-z0-9 /&.-]", "" } else { "Business Services" }
+  $industry = if ($rule) { $rule.Industry } elseif ($industryText) { ([string]$industryText) -replace "[^A-Za-z0-9 /&.-]", "" } else { "Business Services" }
   $sleeve = if ($rule) { $rule.Sleeve } else { Get-SleeveForSector $sectorCode $isEtf }
   [pscustomobject]@{
     name = $name
@@ -458,21 +473,34 @@ function Compact-AssetRow($Mapped, $Indexes) {
 for ($part = 0; $part -lt $BulkParts; $part++) {
   $profiles = Get-ProfileBatch $part
   if (-not $profiles -or @($profiles).Count -eq 0) { break }
+  $acceptedProfiles = 0
+  $skippedProfiles = 0
   foreach ($profile in @($profiles)) {
-    $symbol = Normalize-Symbol $profile.symbol
-    if (-not (Test-ValidSymbol $symbol)) { continue }
+    $symbol = Get-ProfileSymbol $profile
+    if (-not (Test-ValidSymbol $symbol)) {
+      $skippedProfiles++
+      continue
+    }
     $indexes = if ($IndexMembership.ContainsKey($symbol)) { $IndexMembership[$symbol] } else { @() }
     $isIndexMember = @($indexes).Count -gt 0
-    if (-not (Test-IsUsListedProfile $profile $isIndexMember)) { continue }
+    if (-not (Test-IsUsListedProfile $profile $isIndexMember)) {
+      $skippedProfiles++
+      continue
+    }
     $marketCap = Get-Number @($profile.mktCap, $profile.marketCap, 0) 0
-    if (-not $isIndexMember -and -not (Test-IsEtf $profile) -and $marketCap -lt $MinMarketCap) { continue }
+    if (-not $isIndexMember -and -not (Test-IsEtf $profile) -and $marketCap -lt $MinMarketCap) {
+      $skippedProfiles++
+      continue
+    }
     $mapped = Map-Profile $profile
     if ($isIndexMember) { $CoveredIndexSymbols[$symbol] = $true }
     if ($mapped.confidence -lt 65) {
       $Review.Add([ordered]@{ symbol = $symbol; name = $mapped.name; sector = $profile.sector; industry = $profile.industry; suggestedSleeve = $mapped.sleeve; confidence = $mapped.confidence })
     }
     $Db.assets[$symbol] = Compact-AssetRow $mapped @($indexes)
+    $acceptedProfiles++
   }
+  Write-Host "Mapped $acceptedProfiles profiles from part $part. Skipped $skippedProfiles."
 }
 
 Write-Host "Mapped $($Db.assets.Count) assets before overrides."
