@@ -558,11 +558,11 @@ if (Test-Path $OverridesFile) {
 Write-Host "Mapped $($Db.assets.Count) assets after overrides."
 
 $sortedAssets = [ordered]@{}
-@($Db.assets.Keys) |
+@($Db["assets"].Keys) |
   Where-Object { Test-ValidSymbol $_ } |
   Sort-Object |
-  ForEach-Object { $sortedAssets[[string]$_] = $Db.assets[[string]$_] }
-$Db.assets = $sortedAssets
+  ForEach-Object { $sortedAssets[[string]$_] = $Db["assets"][[string]$_] }
+$Db["assets"] = $sortedAssets
 
 $coverage = [ordered]@{}
 foreach ($indexName in $IndexEtfs.Keys) {
