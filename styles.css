@@ -1,16 +1,16 @@
 :root {
   color-scheme: light;
-  --ink: #152026;
-  --muted: #61727c;
+  --ink: #162229;
+  --muted: #61717a;
   --panel: #ffffff;
-  --paper: #f4f0e6;
-  --line: #d9ded7;
-  --green: #16715f;
-  --green-soft: #d9eee7;
-  --red: #b34747;
-  --blue: #2f68a3;
-  --amber: #b78426;
-  --shadow: 0 18px 55px rgba(42, 50, 46, 0.12);
+  --paper: #f6f8f6;
+  --line: #d9e1dc;
+  --green: #2f7668;
+  --green-soft: #e2f0eb;
+  --red: #aa6657;
+  --blue: #3c6f92;
+  --amber: #b18a3b;
+  --shadow: 0 18px 48px rgba(32, 43, 40, 0.11);
 }
 
 * {
@@ -21,7 +21,7 @@ body {
   margin: 0;
   min-height: 100vh;
   font-family: Arial, "Tahoma", sans-serif;
-  background: linear-gradient(135deg, #f4f0e6 0%, #e7efe9 45%, #eef2f7 100%);
+  background: var(--paper);
   color: var(--ink);
 }
 
@@ -35,6 +35,65 @@ select {
   width: min(1440px, 100%);
   margin: 0 auto;
   padding: 24px;
+}
+
+.top-bar,
+.workspace,
+.notes-band {
+  width: 100%;
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.brand-mark img {
+  width: 72px;
+  height: 72px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 10px 24px rgba(22, 34, 41, 0.14);
+  object-fit: cover;
+}
+
+.brand-mark h1 {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.ghost-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--green);
+  font-size: 0.9rem;
+  font-weight: 800;
+  padding: 0 16px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ghost-link:hover {
+  border-color: rgba(22, 113, 95, 0.32);
+  background: var(--green-soft);
 }
 
 .workspace {
@@ -62,38 +121,13 @@ select {
   min-width: 0;
 }
 
-.brand-block h1,
+.brand-mark h1,
 .chart-header h2,
 .notes-band h2 {
   margin: 0;
   letter-spacing: 0;
 }
 
-.brand-block h1 {
-  font-size: clamp(2.2rem, 4vw, 4rem);
-  line-height: 0.95;
-  max-width: 9ch;
-}
-
-.brand-logo {
-  display: block;
-  width: 104px;
-  height: 104px;
-  margin-bottom: 18px;
-  border: 3px solid rgba(255, 255, 255, 0.9);
-  border-radius: 50%;
-  box-shadow: 0 12px 28px rgba(27, 48, 43, 0.18);
-  object-fit: cover;
-}
-
-.subheadline {
-  margin: 8px 0 0;
-  color: var(--green);
-  font-size: 0.98rem;
-  font-weight: 800;
-}
-
-.brand-block p:not(.eyebrow),
 .guide-box p,
 .notes-band p,
 .zone-card p,
@@ -106,13 +140,13 @@ select {
   margin: 0 0 8px;
   color: var(--green);
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .search-form {
-  margin-top: 32px;
+  margin-top: 0;
 }
 
 .search-form label,
@@ -224,6 +258,7 @@ button:hover {
 }
 
 .chart-header,
+.chart-actions,
 .notes-band,
 .mini-legend,
 .status-pill {
@@ -239,6 +274,33 @@ button:hover {
 
 .chart-header h2 {
   font-size: clamp(1.6rem, 3vw, 2.4rem);
+}
+
+.chart-actions {
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.health-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  border: 1px solid rgba(22, 113, 95, 0.28);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--green);
+  font-size: 0.88rem;
+  font-weight: 800;
+  padding: 0 14px;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 8px 22px rgba(22, 113, 95, 0.08);
+}
+
+.health-link:hover {
+  border-color: rgba(22, 113, 95, 0.44);
+  background: var(--green-soft);
 }
 
 .status-pill {
@@ -374,13 +436,8 @@ canvas {
     grid-template-columns: 1fr;
   }
 
-  .brand-block h1 {
-    max-width: none;
-  }
-
-  .brand-logo {
-    width: 88px;
-    height: 88px;
+  .brand-mark h1 {
+    font-size: 1.65rem;
   }
 
   .chart-wrap {
@@ -395,6 +452,32 @@ canvas {
   .mini-legend {
     justify-content: flex-start;
     min-width: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .top-bar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .brand-mark {
+    align-items: flex-start;
+  }
+
+  .brand-mark img {
+    width: 58px;
+    height: 58px;
+  }
+
+  .brand-mark h1 {
+    font-size: 1.35rem;
+  }
+
+  .ghost-link {
+    width: 100%;
   }
 }
 
@@ -419,25 +502,14 @@ canvas {
     flex-direction: column;
   }
 
+  .chart-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
   .chart-wrap {
     min-height: 360px;
     aspect-ratio: 4 / 3;
-  }
-
-  .brand-logo {
-    width: 72px;
-    height: 72px;
-    margin-bottom: 12px;
-  }
-
-  .brand-block h1 {
-    font-size: 2.45rem;
-    line-height: 1;
-  }
-
-  .subheadline {
-    margin-top: 4px;
-    font-size: 0.9rem;
   }
 
   .search-form {
