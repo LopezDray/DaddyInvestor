@@ -558,15 +558,15 @@ if (Test-Path $OverridesFile) {
 Write-Host "Mapped $($Db.assets.Count) assets after overrides."
 
 $sortedAssets = [ordered]@{}
-@($Db["assets"].Keys) |
-  Where-Object { Test-ValidSymbol $_ } |
-  Sort-Object |
-  ForEach-Object { $sortedAssets[[string]$_] = $Db["assets"][[string]$_] }
+$Db["assets"].GetEnumerator() |
+  Where-Object { Test-ValidSymbol $_.Key } |
+  Sort-Object Name |
+  ForEach-Object { $sortedAssets[[string]$_.Key] = $_.Value }
 $Db["assets"] = $sortedAssets
 
 $coverage = [ordered]@{}
 foreach ($indexName in $IndexEtfs.Keys) {
-  $members = @($IndexMembership.Keys | Where-Object { $IndexMembership[$_].Contains($indexName) })
+  $members = @($IndexMembership.GetEnumerator() | Where-Object { $_.Value.Contains($indexName) } | ForEach-Object { $_.Key })
   $covered = @($members | Where-Object { $CoveredIndexSymbols.ContainsKey($_) })
   $missing = @($members | Where-Object { -not $CoveredIndexSymbols.ContainsKey($_) })
   $coverage[$indexName] = [ordered]@{ proxy = $IndexEtfs[$indexName]; total = $members.Count; covered = $covered.Count; missing = $missing }
@@ -576,6 +576,6 @@ foreach ($indexName in $IndexEtfs.Keys) {
 $Review | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ReviewFile -Encoding utf8
 $coverage | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $CoverageFile -Encoding utf8
 
-Write-Host "Wrote $($Db.assets.Count) assets to $OutFile"
+Write-Host "Wrote $($Db["assets"].Count) assets to $OutFile"
 Write-Host "Wrote $($Review.Count) review candidates to $ReviewFile"
 Write-Host "Wrote index coverage report to $CoverageFile"
