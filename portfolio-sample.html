@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ตรวจสุขภาพพอร์ต | คุณพ่อนักลงทุน</title>
-    <link rel="stylesheet" href="portfolio-sample.css?v=20260501-unsaved">
+    <link rel="stylesheet" href="portfolio-sample.css?v=20260501-current-assets">
   </head>
   <body>
     <main class="planner-shell">
@@ -51,16 +51,19 @@
                 <p class="eyebrow">Current assets</p>
                 <h3>รายการที่กรอก</h3>
               </div>
-              <button id="clearAssetsButton" class="small-button" type="button">ล้าง</button>
+              <div class="asset-tools" aria-label="จัดเรียงรายการสินทรัพย์">
+                <button class="small-button sort-button is-active" type="button" data-sort-assets="group">กลุ่ม</button>
+                <button class="small-button sort-button" type="button" data-sort-assets="value">มูลค่า</button>
+                <button id="clearAssetsButton" class="small-button" type="button">ล้าง</button>
+              </div>
             </div>
             <div class="entry-table-wrap">
               <table class="entry-table">
                 <thead>
                   <tr>
                     <th>สินทรัพย์</th>
-                    <th>กลุ่ม / Sector</th>
+                    <th>กลุ่ม</th>
                     <th>มูลค่า USD</th>
-                    <th>สัดส่วน</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -176,6 +179,6 @@
 
     <script src="assets/api-config.js"></script>
     <script src="assets/us-assets-lite.js"></script>
-    <script src="portfolio-sample.js?v=20260501-unsaved"></script>
+    <script src="portfolio-sample.js?v=20260501-current-assets"></script>
   </body>
 </html>

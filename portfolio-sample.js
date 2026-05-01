@@ -460,23 +460,24 @@ const ASSET_MAP = {
 
 let selectedProfile = "balanced";
 let assetRows = [];
+let assetSortMode = "group";
 const UNSAVED_EXIT_WARNING = "ระบบยังไม่สามารถบันทึก รบกวน Capture หน้าจอ";
 
 const SAMPLE_ASSETS = [
-  { symbol: "PLTR", amount: 8000 },
-  { symbol: "MRVL", amount: 8000 },
-  { symbol: "MU", amount: 8000 },
-  { symbol: "TSLA", amount: 6000 },
-  { symbol: "ESLT", amount: 5000 },
-  { symbol: "TSEM", amount: 5000 },
-  { symbol: "EWJ", amount: 7000 },
-  { symbol: "OXY", amount: 7000 },
-  { symbol: "CF", amount: 5000 },
-  { symbol: "VG", amount: 5000 },
-  { symbol: "ORA", amount: 3000 },
-  { symbol: "CHKP", amount: 3000 },
-  { symbol: "IAU", amount: 10000 },
-  { symbol: "SGOV", amount: 20000 },
+  { symbol: "PLTR", amount: 1600 },
+  { symbol: "MRVL", amount: 1600 },
+  { symbol: "MU", amount: 1600 },
+  { symbol: "TSLA", amount: 1200 },
+  { symbol: "ESLT", amount: 1000 },
+  { symbol: "TSEM", amount: 1000 },
+  { symbol: "EWJ", amount: 1400 },
+  { symbol: "OXY", amount: 1400 },
+  { symbol: "CF", amount: 1000 },
+  { symbol: "VG", amount: 1000 },
+  { symbol: "ORA", amount: 600 },
+  { symbol: "CHKP", amount: 600 },
+  { symbol: "IAU", amount: 2000 },
+  { symbol: "SGOV", amount: 4000 },
 ];
 
 function normalizeTicker(rawTicker) {
@@ -1216,31 +1217,76 @@ function scenarioMessage(item) {
   return "อ่อนมาก";
 }
 
+function sortedAssetRows() {
+  const rows = [...assetRows];
+  if (assetSortMode === "value") {
+    return rows.sort((a, b) => Number(b.amount) - Number(a.amount) || normalizeTicker(a.symbol).localeCompare(normalizeTicker(b.symbol)));
+  }
+
+  return rows.sort((a, b) => {
+    const symbolA = normalizeTicker(a.symbol);
+    const symbolB = normalizeTicker(b.symbol);
+    const sleeveA = resolveAsset(symbolA).sleeve || "unknown";
+    const sleeveB = resolveAsset(symbolB).sleeve || "unknown";
+    const groupGap = SLEEVE_ORDER.indexOf(sleeveA) - SLEEVE_ORDER.indexOf(sleeveB);
+    if (groupGap !== 0) return groupGap;
+    return Number(b.amount) - Number(a.amount) || symbolA.localeCompare(symbolB);
+  });
+}
+
+function setAssetSortMode(mode) {
+  assetSortMode = mode === "value" ? "value" : "group";
+  document.querySelectorAll("[data-sort-assets]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.sortAssets === assetSortMode);
+  });
+  renderEntryTable();
+}
+
 function renderEntryTable() {
   const totalUsd = assetRows.reduce((sum, row) => {
     const amount = Number(row.amount);
     return sum + (Number.isFinite(amount) && amount > 0 ? amount : 0);
   }, 0);
 
-  $("entryTable").innerHTML = assetRows.map((row) => {
+  $("entryTable").innerHTML = sortedAssetRows().map((row) => {
     const symbol = normalizeTicker(row.symbol);
     const meta = resolveAsset(symbol);
     const sleeve = SLEEVES[meta.sleeve] || SLEEVES.unknown;
     const valueUsd = Number(row.amount);
     const weight = totalUsd > 0 ? (valueUsd / totalUsd) * 100 : 0;
+    const sectorLine = formatSectorLine(meta);
     return `
       <tr>
-        <td data-label="สินทรัพย์"><span class="symbol-pill">${symbol}</span></td>
-        <td data-label="กลุ่ม / Sector">
+        <td data-label="สินทรัพย์">
+          <span class="symbol-pill">${symbol}</span>
+          <span class="symbol-weight">${formatPct(weight)}</span>
+        </td>
+        <td data-label="กลุ่ม" data-sector-line="${escapeHtml(sectorLine)}">
           <strong class="sleeve-cell">${escapeHtml(sleeve.label)}</strong>
-          <span class="asset-sector">${escapeHtml(formatSectorLine(meta))}</span>
         </td>
         <td data-label="มูลค่า USD">${formatMoney(valueUsd)}</td>
-        <td data-label="สัดส่วน"><strong>${formatPct(weight)}</strong></td>
-        <td data-label=""><button class="small-button" type="button" data-remove-id="${row.id}">ลบ</button></td>
+        <td data-label="">
+          <div class="entry-actions">
+            <button class="small-button" type="button" data-edit-id="${row.id}">แก้ไข</button>
+            <button class="small-button" type="button" data-remove-id="${row.id}">ลบ</button>
+          </div>
+        </td>
       </tr>
     `;
   }).join("");
+}
+
+function editAssetAmount(rowId) {
+  const row = assetRows.find((item) => item.id === rowId);
+  if (!row) return;
+  const symbol = normalizeTicker(row.symbol);
+  const input = window.prompt(`แก้ไขมูลค่า USD ของ ${symbol}`, String(row.amount));
+  if (input === null) return;
+  const amount = Number(String(input).replace(/[^\d.]/g, ""));
+  if (!Number.isFinite(amount) || amount <= 0) return;
+  row.amount = amount;
+  renderEntryTable();
+  runAnalysis();
 }
 
 function addAssetFromForm() {
@@ -1324,7 +1370,17 @@ $("clearAssetsButton").addEventListener("click", () => {
   runAnalysis();
 });
 
+document.querySelectorAll("[data-sort-assets]").forEach((button) => {
+  button.addEventListener("click", () => setAssetSortMode(button.dataset.sortAssets));
+});
+
 $("entryTable").addEventListener("click", (event) => {
+  const editButton = event.target.closest("[data-edit-id]");
+  if (editButton) {
+    editAssetAmount(editButton.dataset.editId);
+    return;
+  }
+
   const button = event.target.closest("[data-remove-id]");
   if (!button) return;
   assetRows = assetRows.filter((row) => row.id !== button.dataset.removeId);
