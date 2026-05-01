@@ -114,10 +114,10 @@ button:hover {
   align-items: center;
   justify-content: center;
   min-height: 40px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--ink);
   border-radius: 999px;
-  background: #fff;
-  color: var(--green);
+  background: var(--ink);
+  color: #fff;
   font-size: 0.9rem;
   font-weight: 800;
   padding: 0 16px;
@@ -126,8 +126,8 @@ button:hover {
 }
 
 .ghost-link:hover {
-  border-color: rgba(22, 113, 95, 0.32);
-  background: var(--green-soft);
+  border-color: #0e171c;
+  background: #0e171c;
 }
 
 .top-actions {

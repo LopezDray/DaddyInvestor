@@ -23,12 +23,12 @@ const SYMBOL_ALIASES = {
   XAUUSD: { dataSymbol: "XAUUSD=X", dataSymbols: ["XAUUSD=X"], fallbackDataSymbols: ["GC=F"], finnhub: { endpoint: "forex/candle", symbol: "OANDA:XAU_USD", label: "Finnhub forex XAU/USD" }, displaySymbol: "XAUUSD", label: "ทองโลก USD", prefix: "$", suffix: "", yahooOnly: true },
   "XAUUSD=X": { dataSymbol: "XAUUSD=X", dataSymbols: ["XAUUSD=X"], fallbackDataSymbols: ["GC=F"], finnhub: { endpoint: "forex/candle", symbol: "OANDA:XAU_USD", label: "Finnhub forex XAU/USD" }, displaySymbol: "XAUUSD", label: "ทองโลก USD", prefix: "$", suffix: "", yahooOnly: true },
   GOLD: { dataSymbol: "XAUUSD=X", dataSymbols: ["XAUUSD=X"], fallbackDataSymbols: ["GC=F"], finnhub: { endpoint: "forex/candle", symbol: "OANDA:XAU_USD", label: "Finnhub forex XAU/USD" }, displaySymbol: "XAUUSD", label: "ทองโลก USD", prefix: "$", suffix: "", yahooOnly: true },
-  BTC: { dataSymbol: "BTC-USD", displaySymbol: "BTC", label: "Bitcoin USD", prefix: "$", suffix: "", yahooOnly: true },
-  BTCUSD: { dataSymbol: "BTC-USD", displaySymbol: "BTC", label: "Bitcoin USD", prefix: "$", suffix: "", yahooOnly: true },
-  "BTC-USD": { dataSymbol: "BTC-USD", displaySymbol: "BTC", label: "Bitcoin USD", prefix: "$", suffix: "", yahooOnly: true },
-  ETH: { dataSymbol: "ETH-USD", displaySymbol: "ETH", label: "Ethereum USD", prefix: "$", suffix: "", yahooOnly: true },
-  ETHUSD: { dataSymbol: "ETH-USD", displaySymbol: "ETH", label: "Ethereum USD", prefix: "$", suffix: "", yahooOnly: true },
-  "ETH-USD": { dataSymbol: "ETH-USD", displaySymbol: "ETH", label: "Ethereum USD", prefix: "$", suffix: "", yahooOnly: true },
+  BTC: { dataSymbol: "BTC-USD", displaySymbol: "BTC", label: "Bitcoin USD", prefix: "$", suffix: "", yahooOnly: true, calendarDays: true },
+  BTCUSD: { dataSymbol: "BTC-USD", displaySymbol: "BTC", label: "Bitcoin USD", prefix: "$", suffix: "", yahooOnly: true, calendarDays: true },
+  "BTC-USD": { dataSymbol: "BTC-USD", displaySymbol: "BTC", label: "Bitcoin USD", prefix: "$", suffix: "", yahooOnly: true, calendarDays: true },
+  ETH: { dataSymbol: "ETH-USD", displaySymbol: "ETH", label: "Ethereum USD", prefix: "$", suffix: "", yahooOnly: true, calendarDays: true },
+  ETHUSD: { dataSymbol: "ETH-USD", displaySymbol: "ETH", label: "Ethereum USD", prefix: "$", suffix: "", yahooOnly: true, calendarDays: true },
+  "ETH-USD": { dataSymbol: "ETH-USD", displaySymbol: "ETH", label: "Ethereum USD", prefix: "$", suffix: "", yahooOnly: true, calendarDays: true },
   SET: { dataSymbol: "^SET.BK", dataSymbols: ["^SET.BK", "SET.BK"], displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
   SETINDEX: { dataSymbol: "^SET.BK", dataSymbols: ["^SET.BK", "SET.BK"], displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
   "SET.BK": { dataSymbol: "^SET.BK", dataSymbols: ["^SET.BK", "SET.BK"], displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
@@ -55,6 +55,12 @@ function resolveInstrument(raw) {
   if (!instrument.dataSymbols) instrument.dataSymbols = [instrument.dataSymbol];
   if (!instrument.fallbackDataSymbols) instrument.fallbackDataSymbols = [];
   return instrument;
+}
+
+function lookbackCandlesForInstrument(instrument) {
+  const tradingDays = Number($("lookbackSelect").value) || 252;
+  const years = Math.max(1, Math.round(tradingDays / 252));
+  return instrument?.calendarDays ? years * 365 : tradingDays;
 }
 
 function money(value, symbol = state.symbol) {
@@ -103,11 +109,11 @@ function cacheKey(symbol) {
   return `daddyInvestorCandles:${DATA_CACHE_VERSION}:${symbol}`;
 }
 
-function getCachedCandles(symbol) {
+function getCachedCandles(symbol, minCandles = 180) {
   const stores = [sessionStorage, localStorage];
   try {
     for (const store of stores) {
-      const current = readCachedCandles(store.getItem(cacheKey(symbol)));
+      const current = readCachedCandles(store.getItem(cacheKey(symbol)), minCandles);
       if (current) return current;
     }
 
@@ -125,7 +131,7 @@ function getCachedCandles(symbol) {
 
     candidates.sort((a, b) => b.savedAt - a.savedAt);
     for (const cached of candidates) {
-      const candles = readCachedCandles(JSON.stringify(cached));
+      const candles = readCachedCandles(JSON.stringify(cached), minCandles);
       if (candles) return candles;
     }
     return null;
@@ -134,10 +140,10 @@ function getCachedCandles(symbol) {
   }
 }
 
-function readCachedCandles(raw) {
+function readCachedCandles(raw, minCandles = 180) {
   const cached = JSON.parse(raw || "null");
   if (!cached || Date.now() - cached.savedAt > CACHE_TTL_MS || !Array.isArray(cached.candles)) return null;
-  if (cached.candles.length < 180) return null;
+  if (cached.candles.length < minCandles) return null;
   return cached.candles;
 }
 
@@ -1039,7 +1045,9 @@ async function runAnalysis(symbol = state.symbol) {
   state.instrument = instrument;
   $("statusPill").textContent = "กำลังโหลด...";
 
-  let candles = getCachedCandles(cleanSymbol);
+  const lookback = lookbackCandlesForInstrument(instrument);
+  const cacheMinimum = Math.max(180, Math.floor(lookback * 0.92));
+  let candles = getCachedCandles(cleanSymbol, cacheMinimum);
 
   if (candles) {
     state.provider = "Cached real daily close";
@@ -1053,7 +1061,6 @@ async function runAnalysis(symbol = state.symbol) {
     }
   }
 
-  const lookback = Number($("lookbackSelect").value);
   const riskMode = $("riskSelect").value;
   if (requestId !== state.requestId) return;
   state.candles = candles;
