@@ -124,6 +124,72 @@ function Invoke-FmpLegacy($Path, $Params) {
   Invoke-WebRequest -Method Get -Uri $uri -Headers @{ "User-Agent" = "DaddyInvestor/1.0" } -UseBasicParsing
 }
 
+function Invoke-FmpV3($Path, $Params) {
+  $query = ($Params.GetEnumerator() | ForEach-Object {
+    "$([uri]::EscapeDataString($_.Key))=$([uri]::EscapeDataString([string]$_.Value))"
+  }) -join "&"
+  if ($query) { $query = "$query&" }
+  $uri = "https://financialmodelingprep.com/api/v3/$Path`?$query" + "apikey=$([uri]::EscapeDataString($env:FMP_API_KEY))"
+  Invoke-RestMethod -Method Get -Uri $uri -Headers @{ "User-Agent" = "DaddyInvestor/1.0" }
+}
+
+function Convert-FmpRows($Data) {
+  if ($null -eq $Data) { return @() }
+  if ($Data -is [array]) { return @($Data) }
+
+  $props = @($Data.PSObject.Properties.Name)
+  foreach ($errorProp in @("Error Message", "error", "message")) {
+    if ($props -contains $errorProp -and -not ($props -contains "symbol")) {
+      Write-Host "FMP returned message: $($Data.$errorProp)"
+      return @()
+    }
+  }
+
+  foreach ($prop in @("data", "results", "items", "profiles")) {
+    if ($props -contains $prop) { return @($Data.$prop) }
+  }
+
+  @($Data)
+}
+
+function Get-ScreenerProfiles {
+  $profiles = New-Object System.Collections.Generic.List[object]
+  $seen = @{}
+
+  foreach ($exchange in @("NASDAQ", "NYSE", "AMEX")) {
+    $rows = @()
+    try {
+      $rows = Convert-FmpRows (Invoke-Fmp "company-screener" @{
+        exchange = $exchange
+        limit = 10000
+      })
+      Write-Host "company-screener $exchange returned $(@($rows).Count) rows."
+    } catch {
+      Write-Host "company-screener $exchange failed. Trying legacy stock-screener."
+      try {
+        $rows = Convert-FmpRows (Invoke-FmpV3 "stock-screener" @{
+          exchange = $exchange
+          limit = 10000
+        })
+        Write-Host "legacy stock-screener $exchange returned $(@($rows).Count) rows."
+      } catch {
+        Write-Host "legacy stock-screener $exchange failed: $($_.Exception.Message)"
+        $rows = @()
+      }
+    }
+
+    foreach ($row in @($rows)) {
+      $symbol = Normalize-Symbol $row.symbol
+      if (-not $symbol -or $seen.ContainsKey($symbol)) { continue }
+      $seen[$symbol] = $true
+      $profiles.Add($row)
+    }
+  }
+
+  Write-Host "Screener source returned $($profiles.Count) unique profiles."
+  @($profiles)
+}
+
 function Get-LegacyAllProfiles {
   Write-Host "profile-bulk part endpoint unavailable. Falling back to api/v4/profile/all."
   $response = Invoke-FmpLegacy "profile/all" @{}
@@ -225,6 +291,17 @@ function Get-ProfileBatch($Part) {
     }
     return @($script:OfflineProfiles)
   }
+
+  if ($Part -eq 0 -and $null -eq $script:ScreenerProfiles) {
+    $script:ScreenerProfiles = @(Get-ScreenerProfiles)
+    if ($script:ScreenerProfiles.Count -ge 1000) {
+      return @($script:ScreenerProfiles)
+    }
+    Write-Host "Screener source had only $($script:ScreenerProfiles.Count) profiles. Trying profile-bulk fallback."
+  } elseif ($null -ne $script:ScreenerProfiles -and $script:ScreenerProfiles.Count -ge 1000) {
+    return @()
+  }
+
   try {
     Invoke-Fmp "profile-bulk" @{ part = $Part }
   } catch {
