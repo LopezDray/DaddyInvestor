@@ -181,6 +181,7 @@ function Get-ScreenerProfiles {
     foreach ($row in @($rows)) {
       $symbol = Normalize-Symbol $row.symbol
       if (-not (Test-ValidSymbol $symbol) -or $seen.ContainsKey($symbol)) { continue }
+      Add-Member -InputObject $row -NotePropertyName "_screenerExchange" -NotePropertyValue $exchange -Force
       $seen[$symbol] = $true
       $profiles.Add($row)
     }
@@ -345,6 +346,8 @@ function Test-IsUsExchange($Exchange) {
 
 function Test-IsUsListedProfile($Profile, $IsIndexMember) {
   if ($IsIndexMember) { return $true }
+  $sourceExchange = First-Value @($Profile._screenerExchange)
+  if (Test-IsUsExchange $sourceExchange) { return $true }
   $country = ([string](First-Value @($Profile.country, $Profile.countryName))).Trim().ToUpperInvariant()
   if ($country -and @("US", "USA", "UNITED STATES", "UNITED STATES OF AMERICA") -notcontains $country) {
     return $false
@@ -471,6 +474,8 @@ for ($part = 0; $part -lt $BulkParts; $part++) {
     $Db.assets[$symbol] = Compact-AssetRow $mapped @($indexes)
   }
 }
+
+Write-Host "Mapped $($Db.assets.Count) assets before overrides."
 
 if (Test-Path $OverridesFile) {
   $overrides = Get-Content -LiteralPath $OverridesFile -Raw -Encoding utf8 | ConvertFrom-Json
