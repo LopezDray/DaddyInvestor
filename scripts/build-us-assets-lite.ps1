@@ -187,7 +187,7 @@ function Get-ScreenerProfiles {
   }
 
   Write-Host "Screener source returned $($profiles.Count) unique profiles."
-  @($profiles)
+  return $profiles.ToArray()
 }
 
 function Get-LegacyAllProfiles {
