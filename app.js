@@ -1061,19 +1061,27 @@ async function loadRealCandles(symbol, instrument = state.instrument) {
 }
 
 function renderLoadError(symbol) {
+  const helpText = thaiSearchHint(symbol);
   $("chartTitle").textContent = symbol;
   $("lastPrice").textContent = "-";
   $("lastPriceDate").textContent = "โหลดราคาปิดล่าสุดไม่ได้";
   $("trendState").textContent = "-";
   $("accumulationZone").textContent = "-";
-  $("zoneReason").textContent = "ยังโหลด daily candles จริงไม่ได้ จึงไม่คำนวณโซนสะสม";
+  $("zoneReason").textContent = helpText || "ยังโหลด daily candles จริงไม่ได้ จึงไม่คำนวณโซนสะสม";
   $("macdSummary").textContent = "-";
-  $("macdDetail").textContent = "ต้องมีข้อมูลกราฟจริงก่อนจึงคำนวณ MACD ได้";
+  $("macdDetail").textContent = helpText || "ต้องมีข้อมูลกราฟจริงก่อนจึงคำนวณ MACD ได้";
   $("supportList").innerHTML = "";
   $("resistanceList").innerHTML = "";
   $("statusPill").textContent = "โหลดข้อมูลไม่ได้";
-  $("dataSource").textContent = "Real daily data unavailable";
-  drawMessageChart("โหลดกราฟราคาจริงไม่ได้");
+  $("dataSource").textContent = helpText || "Real daily data unavailable";
+  drawMessageChart(helpText || "โหลดกราฟราคาจริงไม่ได้");
+}
+
+function thaiSearchHint(symbol) {
+  const clean = normalizeSymbol(symbol || "");
+  if (!clean || clean.includes(".BK") || clean.startsWith("^") || clean.includes("-")) return "";
+  if (SYMBOL_ALIASES[clean]) return "";
+  return "หากเป็นหุ้นไทยและค้นหาไม่เจอ ลองใส่ .BK เช่น TISCO.BK";
 }
 
 function drawMessageChart(message) {

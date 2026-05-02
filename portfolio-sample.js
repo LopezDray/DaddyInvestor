@@ -870,7 +870,7 @@ function renderLookupHint() {
       scheduleApiLookup(symbol);
       return;
     }
-    hint.textContent = `${symbol}: ยังไม่มีใน local และยังไม่ได้ตั้ง API endpoint`;
+    hint.textContent = `${symbol}: ยังไม่มีใน local หากเป็นหุ้นไทยลองค้นหาแบบ TISCO.BK`;
     hint.className = "lookup-hint is-unknown";
     return;
   }
