@@ -35,6 +35,15 @@ const SYMBOL_ALIASES = {
   "^SET.BK": { dataSymbol: "^SET.BK", dataSymbols: ["^SET.BK", "SET.BK"], displaySymbol: "SET", label: "ดัชนี SET ไทย", prefix: "", suffix: " จุด", yahooOnly: true },
 };
 
+const THAI_SYMBOLS = new Set([
+  "ADVANC", "AOT", "AWC", "BANPU", "BBL", "BCP", "BDMS", "BEM", "BGRIM", "BH",
+  "BJC", "BTS", "CBG", "CCET", "CENTEL", "COM7", "CPALL", "CPF", "CPN", "CRC",
+  "DELTA", "EA", "EGCO", "GLOBAL", "GPSC", "GULF", "HMPRO", "INTUCH", "ITC", "IVL",
+  "JMT", "KBANK", "KTB", "KTC", "LH", "MINT", "MTC", "OR", "OSP", "PTT",
+  "PTTEP", "PTTGC", "RATCH", "SCB", "SCC", "SCGP", "TIDLOR", "TOP", "TRUE", "TU",
+  "WHA",
+]);
+
 function instrumentDefaults(symbol) {
   return {
     dataSymbol: symbol,
@@ -51,10 +60,30 @@ function resolveInstrument(raw) {
   const clean = normalizeSymbol(raw) || "AAPL";
   const compact = clean.replace(/[./]/g, "");
   const alias = SYMBOL_ALIASES[clean] || SYMBOL_ALIASES[compact];
+  const thaiSymbol = alias ? "" : thaiBaseSymbol(clean);
+  if (thaiSymbol) return thaiInstrument(thaiSymbol);
   const instrument = alias ? { ...alias } : instrumentDefaults(clean);
   if (!instrument.dataSymbols) instrument.dataSymbols = [instrument.dataSymbol];
   if (!instrument.fallbackDataSymbols) instrument.fallbackDataSymbols = [];
   return instrument;
+}
+
+function thaiBaseSymbol(symbol) {
+  const base = symbol.endsWith(".BK") ? symbol.slice(0, -3) : symbol;
+  return THAI_SYMBOLS.has(base) ? base : "";
+}
+
+function thaiInstrument(symbol) {
+  return {
+    dataSymbol: `${symbol}.BK`,
+    dataSymbols: [`${symbol}.BK`],
+    fallbackDataSymbols: [],
+    displaySymbol: symbol,
+    label: `${symbol} หุ้นไทย`,
+    prefix: "",
+    suffix: " บาท",
+    yahooOnly: true,
+  };
 }
 
 function lookbackCandlesForInstrument(instrument) {
@@ -93,6 +122,24 @@ function formatMarketDate(dateText) {
 
 function normalizeSymbol(raw) {
   return raw.trim().toUpperCase().replace(/[^A-Z0-9.^=-]/g, "");
+}
+
+function attachSymbolSuggestions() {
+  const input = $("symbolInput");
+  if (!input) return;
+
+  const listId = "symbolSuggestions";
+  const list = document.createElement("datalist");
+  list.id = listId;
+
+  const symbols = [...new Set([
+    "AAPL", "MSFT", "NVDA", "TSLA", "XAUUSD", "BTC", "ETH", "SET",
+    ...THAI_SYMBOLS,
+  ])].sort((a, b) => a.localeCompare(b));
+
+  list.innerHTML = symbols.map((symbol) => `<option value="${symbol}"></option>`).join("");
+  document.body.appendChild(list);
+  input.setAttribute("list", listId);
 }
 
 function getFinnhubKey() {
@@ -1088,4 +1135,5 @@ $("riskSelect").addEventListener("change", () => runAnalysis(state.symbol));
 window.addEventListener("resize", drawChart);
 
 state.finnhubKey = getFinnhubKey();
+attachSymbolSuggestions();
 runAnalysis("AAPL");

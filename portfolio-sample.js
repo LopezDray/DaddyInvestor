@@ -506,6 +506,79 @@ const ASSET_MAP = {
   },
 };
 
+const THAI_ASSET_SEED = {
+  SET: ["SET Index", "diversified", "Thailand Equity Index", "Broad Thai market", "Thailand market diversification", 58],
+  ADVANC: ["Advanced Info Service", "hedge", "Information & Communication Technology", "Telecommunications", "Thai telecom / Essential connectivity", 45],
+  AOT: ["Airports of Thailand", "diversified", "Transportation & Logistics", "Airport infrastructure", "Thailand tourism and airport infrastructure", 62],
+  AWC: ["Asset World Corp", "diversified", "Property Development", "Hospitality property", "Thailand property and tourism cycle", 70],
+  BANPU: ["Banpu", "hedge", "Energy & Utilities", "Coal and energy", "Energy / Commodity exposure", 72],
+  BBL: ["Bangkok Bank", "diversified", "Banking", "Commercial banking", "Thai financials / Domestic cycle", 57],
+  BCP: ["Bangchak", "hedge", "Energy & Utilities", "Refining and oil retail", "Energy / Oil hedge", 64],
+  BDMS: ["Bangkok Dusit Medical Services", "hedge", "Health Care Services", "Hospital network", "Healthcare defensive growth", 46],
+  BEM: ["Bangkok Expressway and Metro", "hedge", "Transportation & Logistics", "Transit infrastructure", "Essential infrastructure", 48],
+  BGRIM: ["B.Grimm Power", "hedge", "Energy & Utilities", "Power producer", "Utilities / Power infrastructure", 55],
+  BH: ["Bumrungrad Hospital", "hedge", "Health Care Services", "Hospital services", "Healthcare / Medical tourism", 50],
+  BJC: ["Berli Jucker", "hedge", "Commerce", "Consumer staples retail", "Consumer staples / Defensive commerce", 47],
+  BTS: ["BTS Group Holdings", "diversified", "Transportation & Logistics", "Rail transit and media", "Thai transit / Domestic cycle", 66],
+  CBG: ["Carabao Group", "hedge", "Food & Beverage", "Beverage", "Consumer staples beverage", 58],
+  CCET: ["Cal-Comp Electronics Thailand", "growth", "Electronic Components", "Electronics manufacturing", "Electronics / Export manufacturing growth", 78],
+  CENTEL: ["Central Plaza Hotel", "diversified", "Tourism & Leisure", "Hotels and restaurants", "Thailand tourism cycle", 67],
+  COM7: ["Com7", "growth", "Commerce", "Technology retail", "Consumer technology retail", 66],
+  CPALL: ["CP All", "hedge", "Commerce", "Convenience stores", "Essential retail / Consumer staples", 44],
+  CPF: ["Charoen Pokphand Foods", "hedge", "Food & Beverage", "Food producer", "Food security / Consumer staples", 52],
+  CPN: ["Central Pattana", "diversified", "Property Development", "Retail property", "Thai property and consumption cycle", 60],
+  CRC: ["Central Retail", "diversified", "Commerce", "Retail", "Thai domestic consumption", 59],
+  DELTA: ["Delta Electronics Thailand", "growth", "Electronic Components", "Power electronics", "Power electronics / Data center supply chain", 82],
+  EA: ["Energy Absolute", "growth", "Energy & Utilities", "Renewable energy and EV", "Clean energy growth", 86],
+  EGCO: ["Electricity Generating", "hedge", "Energy & Utilities", "Power producer", "Utilities / Power generation", 42],
+  GLOBAL: ["Siam Global House", "diversified", "Commerce", "Home improvement retail", "Domestic consumption / Building materials retail", 60],
+  GPSC: ["Global Power Synergy", "hedge", "Energy & Utilities", "Power producer", "Utilities / Power generation", 50],
+  GULF: ["Gulf Development", "hedge", "Energy & Utilities", "Power and infrastructure", "Utilities / Energy infrastructure", 57],
+  HMPRO: ["Home Product Center", "hedge", "Commerce", "Home improvement retail", "Essential home retail", 48],
+  INTUCH: ["Intouch Holdings", "hedge", "Information & Communication Technology", "Telecom holding", "Telecom / Cash flow holding", 43],
+  ITC: ["i-Tail Corporation", "hedge", "Food & Beverage", "Pet food export", "Food export / Consumer staples", 55],
+  IVL: ["Indorama Ventures", "diversified", "Petrochemicals & Chemicals", "Petrochemicals", "Global chemicals cycle", 70],
+  JMT: ["JMT Network Services", "diversified", "Finance & Securities", "Debt collection", "Thai credit cycle", 75],
+  KBANK: ["Kasikornbank", "diversified", "Banking", "Commercial banking", "Thai financials / Domestic cycle", 60],
+  KTB: ["Krung Thai Bank", "diversified", "Banking", "Commercial banking", "Thai financials / Domestic cycle", 55],
+  KTC: ["Krungthai Card", "diversified", "Finance & Securities", "Consumer finance", "Thai consumer credit", 64],
+  LH: ["Land and Houses", "diversified", "Property Development", "Residential property", "Thai property cycle", 58],
+  MINT: ["Minor International", "diversified", "Tourism & Leisure", "Hotels and restaurants", "Global tourism cycle", 68],
+  MTC: ["Muangthai Capital", "diversified", "Finance & Securities", "Consumer finance", "Thai consumer credit", 72],
+  OR: ["PTT Oil and Retail", "hedge", "Energy & Utilities", "Oil retail and consumer retail", "Energy retail / Essential consumption", 50],
+  OSP: ["Osotspa", "hedge", "Food & Beverage", "Beverage", "Consumer staples beverage", 45],
+  PTT: ["PTT", "hedge", "Energy & Utilities", "Integrated energy", "Energy / Inflation hedge", 54],
+  PTTEP: ["PTT Exploration and Production", "hedge", "Energy & Utilities", "Oil and gas exploration", "Oil and gas / Inflation hedge", 62],
+  PTTGC: ["PTT Global Chemical", "diversified", "Petrochemicals & Chemicals", "Petrochemicals", "Petrochemical cycle", 69],
+  RATCH: ["Ratch Group", "hedge", "Energy & Utilities", "Power producer", "Utilities / Power generation", 43],
+  SCB: ["SCB X", "diversified", "Banking", "Commercial banking", "Thai financials / Domestic cycle", 59],
+  SCC: ["Siam Cement", "diversified", "Construction Materials", "Cement and chemicals", "Thai industrial cycle", 62],
+  SCGP: ["SCG Packaging", "hedge", "Packaging", "Packaging", "Packaging / Essential supply chain", 52],
+  TIDLOR: ["Ngern Tid Lor", "diversified", "Finance & Securities", "Consumer finance", "Thai consumer credit", 72],
+  TOP: ["Thai Oil", "hedge", "Energy & Utilities", "Refining", "Oil refinery / Energy hedge", 67],
+  TRUE: ["True Corporation", "hedge", "Information & Communication Technology", "Telecommunications", "Thai telecom / Essential connectivity", 56],
+  TU: ["Thai Union Group", "hedge", "Food & Beverage", "Seafood producer", "Food export / Consumer staples", 51],
+  WHA: ["WHA Corporation", "diversified", "Property Development", "Industrial estate and logistics", "Thai industrial estate / FDI cycle", 63],
+};
+
+Object.assign(
+  ASSET_MAP,
+  Object.fromEntries(
+    Object.entries(THAI_ASSET_SEED).map(([symbol, [name, sleeve, sector, industry, theme, risk]]) => [
+      symbol,
+      {
+        name,
+        sleeve,
+        sector,
+        industry,
+        theme,
+        risk,
+        note: "หุ้นไทยชุดเริ่มต้น จัดกลุ่มตาม sector/industry และบทบาทในพอร์ต",
+      },
+    ]),
+  ),
+);
+
 let selectedProfile = "balanced";
 let assetRows = [];
 let assetSortMode = "group";
@@ -532,7 +605,22 @@ const SAMPLE_ASSETS = [
 
 function normalizeTicker(rawTicker) {
   const ticker = rawTicker.trim().toUpperCase().replace(/[^A-Z0-9._-]/g, "");
-  return ALIASES[ticker] || ticker;
+  const aliased = ALIASES[ticker] || ticker;
+  return aliased.endsWith(".BK") ? aliased.slice(0, -3) : aliased;
+}
+
+function attachAssetSuggestions() {
+  const input = $("symbolInput");
+  if (!input) return;
+
+  const listId = "assetSuggestions";
+  const list = document.createElement("datalist");
+  list.id = listId;
+
+  const symbols = Object.keys(ASSET_MAP).sort((a, b) => a.localeCompare(b));
+  list.innerHTML = symbols.map((symbol) => `<option value="${symbol}"></option>`).join("");
+  document.body.appendChild(list);
+  input.setAttribute("list", listId);
 }
 
 function getHoldingsFromRows() {
@@ -1570,5 +1658,6 @@ window.addEventListener("beforeunload", (event) => {
   return UNSAVED_EXIT_WARNING;
 });
 
+attachAssetSuggestions();
 loadSampleAssets();
 renderLookupHint();
