@@ -609,20 +609,6 @@ function normalizeTicker(rawTicker) {
   return aliased.endsWith(".BK") ? aliased.slice(0, -3) : aliased;
 }
 
-function attachAssetSuggestions() {
-  const input = $("symbolInput");
-  if (!input) return;
-
-  const listId = "assetSuggestions";
-  const list = document.createElement("datalist");
-  list.id = listId;
-
-  const symbols = Object.keys(ASSET_MAP).sort((a, b) => a.localeCompare(b));
-  list.innerHTML = symbols.map((symbol) => `<option value="${symbol}"></option>`).join("");
-  document.body.appendChild(list);
-  input.setAttribute("list", listId);
-}
-
 function getHoldingsFromRows() {
   const merged = new Map();
   assetRows.forEach((row) => {
@@ -1658,6 +1644,5 @@ window.addEventListener("beforeunload", (event) => {
   return UNSAVED_EXIT_WARNING;
 });
 
-attachAssetSuggestions();
 loadSampleAssets();
 renderLookupHint();

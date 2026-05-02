@@ -124,24 +124,6 @@ function normalizeSymbol(raw) {
   return raw.trim().toUpperCase().replace(/[^A-Z0-9.^=-]/g, "");
 }
 
-function attachSymbolSuggestions() {
-  const input = $("symbolInput");
-  if (!input) return;
-
-  const listId = "symbolSuggestions";
-  const list = document.createElement("datalist");
-  list.id = listId;
-
-  const symbols = [...new Set([
-    "AAPL", "MSFT", "NVDA", "TSLA", "XAUUSD", "BTC", "ETH", "SET",
-    ...THAI_SYMBOLS,
-  ])].sort((a, b) => a.localeCompare(b));
-
-  list.innerHTML = symbols.map((symbol) => `<option value="${symbol}"></option>`).join("");
-  document.body.appendChild(list);
-  input.setAttribute("list", listId);
-}
-
 function getFinnhubKey() {
   return FINNHUB_API_KEY;
 }
@@ -633,10 +615,22 @@ function analyze(candles, lookback, riskMode, quote = null) {
   const macdLine = macdData.macdLine.at(-1);
   const signal = macdData.signal.at(-1);
   const pivots = nearestPivots(scoped);
+  const recent20 = scoped.slice(-20);
+  const recent60 = scoped.slice(-60);
+  const recent120 = scoped.slice(-120);
 
   const supportCandidates = uniqueLevels([
+    { value: fib["23.6"], label: "Fib 23.6%" },
+    { value: fib["38.2"], label: "Fib 38.2%" },
+    { value: fib["50.0"], label: "Fib 50%" },
+    { value: fib["61.8"], label: "Fib 61.8%" },
+    { value: fib["78.6"], label: "Fib 78.6%" },
     { value: weeklyMa50, label: "MA50 Week" },
     { value: weeklyEma200, label: "EMA200 Week" },
+    { value: minLow(recent20), label: "Low 20D" },
+    { value: minLow(recent60), label: "Low 60D" },
+    { value: minLow(recent120), label: "Low 120D" },
+    { value: low, label: "Range low" },
     ...pivots.filter((pivot) => pivot.type === "support").map((pivot) => ({ ...pivot, label: "backup pivot" })),
   ]);
   const resistanceCandidates = uniqueLevels([
@@ -645,6 +639,9 @@ function analyze(candles, lookback, riskMode, quote = null) {
     { value: fib["50.0"], label: "Fib 50%" },
     { value: fib["61.8"], label: "Fib 61.8%" },
     { value: high, label: "High เดิม" },
+    { value: maxHigh(recent20), label: "High 20D" },
+    { value: maxHigh(recent60), label: "High 60D" },
+    { value: maxHigh(recent120), label: "High 120D" },
     { value: fib["127.2"], label: "Fib Extension 127.2%" },
     { value: fib["161.8"], label: "Fib Extension 161.8%" },
     ...pivots.filter((pivot) => pivot.type === "resistance").map((pivot) => ({ ...pivot, label: "backup high" })),
@@ -654,12 +651,14 @@ function analyze(candles, lookback, riskMode, quote = null) {
   const resistances = pickTwoLevels(resistanceCandidates, last, "resistance");
   while (supports.length < 2) {
     const step = supports.length + 1;
-    supports.push({ value: last * (1 - step * 0.08), label: "price band" });
+    supports.push({ value: last * (1 - step * 0.07), label: "deeper price band" });
   }
   while (resistances.length < 2) {
     const step = resistances.length + 1;
-    resistances.push({ value: last * (1 + step * 0.08), label: "price band" });
+    resistances.push({ value: last * (1 + step * 0.06), label: "upper price band" });
   }
+  supports.sort((a, b) => b.value - a.value);
+  resistances.sort((a, b) => a.value - b.value);
 
   const deepBias = riskMode === "patient" ? fib["78.6"] : fib["61.8"];
   const upperBias = riskMode === "momentum" ? fib["38.2"] : fib["50.0"];
@@ -720,17 +719,29 @@ function analyze(candles, lookback, riskMode, quote = null) {
 }
 
 function pickTwoLevels(candidates, last, kind) {
-  const belowOrNear = candidates
-    .filter((level) => kind === "support" ? level.value <= last * 1.025 : level.value >= last * 0.975)
+  const buffer = last * 0.003;
+  const validSide = candidates
+    .filter((level) => kind === "support" ? level.value < last - buffer : level.value > last + buffer)
     .sort((a, b) => kind === "support" ? b.value - a.value : a.value - b.value);
 
-  const output = belowOrNear.slice(0, 2);
+  const output = validSide.slice(0, 2);
   const fallback = candidates
+    .filter((level) => kind === "support" ? level.value < last - buffer : level.value > last + buffer)
     .filter((level) => !output.some((item) => item.label === level.label && item.value === level.value))
-    .sort((a, b) => Math.abs(a.value - last) - Math.abs(b.value - last));
+    .sort((a, b) => kind === "support" ? b.value - a.value : a.value - b.value);
 
   while (output.length < 2 && fallback.length) output.push(fallback.shift());
   return output;
+}
+
+function minLow(candles) {
+  const lows = candles.map((candle) => candle.low).filter(Number.isFinite);
+  return lows.length ? Math.min(...lows) : null;
+}
+
+function maxHigh(candles) {
+  const highs = candles.map((candle) => candle.high).filter(Number.isFinite);
+  return highs.length ? Math.max(...highs) : null;
 }
 
 function renderLists(analysis) {
@@ -1135,5 +1146,4 @@ $("riskSelect").addEventListener("change", () => runAnalysis(state.symbol));
 window.addEventListener("resize", drawChart);
 
 state.finnhubKey = getFinnhubKey();
-attachSymbolSuggestions();
 runAnalysis("AAPL");
